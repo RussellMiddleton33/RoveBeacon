@@ -162,6 +162,12 @@ export class UserMarker extends THREE.Group {
    * Set the marker position in scene coordinates
    */
   setPosition(x: number, y: number, z: number = 0): void {
+    // Validate inputs - reject NaN or Infinity
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      console.warn('UserMarker.setPosition: Invalid coordinates ignored');
+      return;
+    }
+    
     const newPos = new THREE.Vector3(x, y, z + 2); // Slight elevation
     
     if (!this.isVisible) {
@@ -192,7 +198,11 @@ export class UserMarker extends THREE.Group {
    * Set GPS accuracy in meters - affects the size of the accuracy ring
    */
   setAccuracy(meters: number): void {
-    this.currentAccuracy = meters;
+    // Validate and clamp accuracy to reasonable bounds
+    if (!Number.isFinite(meters) || meters < 0) {
+      return;
+    }
+    this.currentAccuracy = Math.min(meters, 10000); // Cap at 10km
   }
   
   /**

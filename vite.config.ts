@@ -8,6 +8,7 @@ export default defineConfig({
     svelte(),
     basicSsl() // Generates self-signed certificate for HTTPS
   ],
+  base: process.env.BASE_URL || '/',
   server: {
     host: true // Expose to network
   }

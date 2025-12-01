@@ -1,10 +1,24 @@
-# threejs-user-location
+# 📍 RoveBeacon
 
 A Three.js SDK for displaying user location with GPS accuracy ring and direction indicator. Perfect for mapping applications, AR experiences, and location-based games.
 
-![Demo](./demo.gif)
+<p align="center">
+  <a href="https://russellmiddleton33.github.io/RoveBeacon/">
+    <img src="https://img.shields.io/badge/🚀_Live_Demo-Try_it_Now!-4285F4?style=for-the-badge&logoColor=white" alt="Live Demo" />
+  </a>
+</p>
 
-## Features
+<p align="center">
+  <a href="https://russellmiddleton33.github.io/RoveBeacon/">
+    <strong>👉 Try the Live Demo on your Phone! 👈</strong>
+  </a>
+</p>
+
+> **Note:** The demo requires location permissions and works best on mobile devices with GPS.
+
+---
+
+## ✨ Features
 
 - 🔵 **Blue dot marker** - Clean, Google Maps-style user location indicator
 - 📍 **Accuracy ring** - Pulsing ring that scales with GPS accuracy
@@ -14,17 +28,17 @@ A Three.js SDK for displaying user location with GPS accuracy ring and direction
 - 🎨 **Customizable** - Colors, sizes, and behaviors are all configurable
 - 📦 **Lightweight** - Only peer dependency is Three.js
 
-## Installation
+## 📦 Installation
 
 ```bash
-npm install threejs-user-location three
+npm install rovebeacon three
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
 ```typescript
 import * as THREE from 'three';
-import { UserMarker, GeolocationProvider } from 'threejs-user-location';
+import { UserMarker, GeolocationProvider } from 'rovebeacon';
 
 // Create your Three.js scene
 const scene = new THREE.Scene();
@@ -79,7 +93,7 @@ function animate() {
 animate();
 ```
 
-## API Reference
+## 📖 API Reference
 
 ### UserMarker
 
@@ -161,7 +175,7 @@ geo.on('permissionChange', (state: PermissionState) => {
 });
 ```
 
-## Coordinate Conversion
+## 🗺️ Coordinate Conversion
 
 The SDK doesn't include coordinate conversion - you need to convert lat/lng to your scene's coordinate system. Here's an example using Web Mercator:
 
@@ -185,26 +199,29 @@ function lngLatToScene(lng: number, lat: number, center: [number, number]): { x:
 }
 ```
 
-## Examples
+## 🛠️ Development
 
-### Basic Usage
-
-See the `/src/example` folder for a complete Svelte demo application with:
-- Map tile loading
-- Debug controls
-- Location info panel
-- Mobile-optimized UI
-
-### Run the Example
+### Run the Example App
 
 ```bash
-git clone <repo>
-cd threejs-user-location
+git clone https://github.com/RussellMiddleton33/RoveBeacon.git
+cd RoveBeacon
 npm install
 npm run dev
 ```
 
-## Browser Support
+### Build the SDK
+
+```bash
+npm run build:lib
+```
+
+This outputs to `dist/`:
+- `threejs-user-location.js` - ES Module
+- `threejs-user-location.umd.cjs` - UMD bundle
+- `*.d.ts` - TypeScript declarations
+
+## 🌐 Browser Support
 
 - Chrome 50+
 - Firefox 55+
@@ -213,8 +230,12 @@ npm run dev
 - Mobile Safari (iOS 10+)
 - Chrome for Android
 
-**Note:** HTTPS is required for geolocation on most browsers.
+> **Note:** HTTPS is required for geolocation on most browsers.
 
-## License
+## 📄 License
 
 MIT
+
+## 🤝 Contributing
+
+Contributions welcome! Please open an issue or PR.

@@ -158,7 +158,7 @@ export class GeolocationProvider {
         };
       } catch (e) {
         // Permissions API not fully supported, continue anyway
-        console.log('Permissions API not fully supported');
+        // Silent fallback - no console logging in production
       }
     }
     
