@@ -73,7 +73,7 @@ const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   smoothHeading: true,
   positionSmoothingFactor: 0.03,
   headingSmoothingFactor: 0.15,
-  orientation: 'z-up',
+  orientation: 'y-up',
   enableAutoConfidence: true,
   stalenessLowThresholdMs: STALENESS_LOW_THRESHOLD_MS,
   stalenessLostThresholdMs: STALENESS_LOST_THRESHOLD_MS,

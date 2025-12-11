@@ -168,8 +168,8 @@
       scene.add(tileGroup);
 
       // 5. Initialize SDK Controller
-      // Note: Our map tiles are Z-up.
-      // SDK defaults to Z-up. Perfect match.
+      // Note: Our map tiles are Z-up, so we explicitly set orientation.
+      // SDK defaults to Y-up (standard Three.js), but GIS maps use Z-up.
       controller = new ThreeYouAreHereController({
         center: center,
         scale: SCENE_SCALE,

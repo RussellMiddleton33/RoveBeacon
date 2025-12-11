@@ -40,14 +40,14 @@ describe('ThreeUserMarker', () => {
             customMarker.dispose();
         });
 
-        it('handles y-up orientation', () => {
-            const yUpMarker = new ThreeUserMarker({ orientation: 'y-up' });
-            expect(yUpMarker.rotation.x).toBeCloseTo(-Math.PI / 2);
-            yUpMarker.dispose();
+        it('handles z-up orientation', () => {
+            const zUpMarker = new ThreeUserMarker({ orientation: 'z-up' });
+            expect(zUpMarker.rotation.x).toBeCloseTo(0);
+            zUpMarker.dispose();
         });
 
-        it('defaults to z-up orientation', () => {
-            expect(marker.rotation.x).toBeCloseTo(0);
+        it('defaults to y-up orientation', () => {
+            expect(marker.rotation.x).toBeCloseTo(-Math.PI / 2);
         });
     });
 

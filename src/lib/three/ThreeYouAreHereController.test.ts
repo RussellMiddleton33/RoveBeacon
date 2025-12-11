@@ -647,10 +647,36 @@ describe('ThreeYouAreHereController', () => {
     });
 
     describe('coordinate systems', () => {
-        it('uses z-up coordinates by default', async () => {
+        it('uses y-up coordinates by default', async () => {
             controller = new ThreeYouAreHereController({
                 center: defaultCenter,
                 locationSource: mockSource,
+            });
+
+            const setPositionSpy = vi.spyOn(controller.marker, 'setPosition');
+            await controller.start(scene);
+
+            mockSource.emitUpdate({
+                longitude: -74.006,
+                latitude: 40.7128,
+                altitude: 100,
+                accuracy: 10,
+                speed: 0,
+                heading: null,
+                timestamp: Date.now(),
+            });
+
+            // Y-up: x, z, -y transformation applied (default)
+            expect(setPositionSpy).toHaveBeenCalled();
+        });
+
+        it('uses z-up coordinates when specified', async () => {
+            controller = new ThreeYouAreHereController({
+                center: defaultCenter,
+                locationSource: mockSource,
+                markerOptions: {
+                    orientation: 'z-up',
+                },
             });
 
             const setPositionSpy = vi.spyOn(controller.marker, 'setPosition');
@@ -671,32 +697,6 @@ describe('ThreeYouAreHereController', () => {
             expect(typeof x).toBe('number');
             expect(typeof y).toBe('number');
             expect(typeof z).toBe('number');
-        });
-
-        it('converts to y-up coordinates when specified', async () => {
-            controller = new ThreeYouAreHereController({
-                center: defaultCenter,
-                locationSource: mockSource,
-                markerOptions: {
-                    orientation: 'y-up',
-                },
-            });
-
-            const setPositionSpy = vi.spyOn(controller.marker, 'setPosition');
-            await controller.start(scene);
-
-            mockSource.emitUpdate({
-                longitude: -74.006,
-                latitude: 40.7128,
-                altitude: 100,
-                accuracy: 10,
-                speed: 0,
-                heading: null,
-                timestamp: Date.now(),
-            });
-
-            // Y-up: x, z, -y transformation applied
-            expect(setPositionSpy).toHaveBeenCalled();
         });
     });
 

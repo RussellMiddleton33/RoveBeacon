@@ -205,9 +205,9 @@ export interface UserMarkerOptions {
 
   /**
    * Coordinate system orientation
-   * - 'z-up': Z axis points up (common in mapping applications)
    * - 'y-up': Y axis points up (standard Three.js convention)
-   * @default 'z-up'
+   * - 'z-up': Z axis points up (common in GIS/mapping applications)
+   * @default 'y-up'
    */
   orientation?: 'z-up' | 'y-up';
 
