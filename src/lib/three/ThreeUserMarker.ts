@@ -638,8 +638,12 @@ export class ThreeUserMarker extends THREE.Group {
         const clampedAccuracy = Math.max(5, Math.min(100, this.currentAccuracy));
         const accuracyScale = clampedAccuracy / 20;
         const pulseAmount = 1 + Math.sin(this.pulsePhase) * 0.15;
+
+        // Low confidence: 2x ring size to indicate uncertainty
+        const lowConfidenceMultiplier = this.confidenceState === 'low' ? 2.0 : 1.0;
+
         // Apply both overallScale and independent ringScale
-        const finalScale = accuracyScale * pulseAmount * this.options.overallScale * this.options.ringScale;
+        const finalScale = accuracyScale * pulseAmount * this.options.overallScale * this.options.ringScale * lowConfidenceMultiplier;
 
         this.glowMesh.scale.set(finalScale, finalScale, 1);
 
@@ -648,8 +652,10 @@ export class ThreeUserMarker extends THREE.Group {
       } else {
         // No pulse animation - just static scale
         const clampedAccuracy = Math.max(5, Math.min(100, this.currentAccuracy));
+        // Low confidence: 2x ring size to indicate uncertainty
+        const lowConfidenceMultiplier = this.confidenceState === 'low' ? 2.0 : 1.0;
         // Apply both overallScale and independent ringScale
-        const accuracyScale = clampedAccuracy / 20 * this.options.overallScale * this.options.ringScale;
+        const accuracyScale = clampedAccuracy / 20 * this.options.overallScale * this.options.ringScale * lowConfidenceMultiplier;
         this.glowMesh.scale.set(accuracyScale, accuracyScale, 1);
       }
     }

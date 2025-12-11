@@ -99,15 +99,20 @@ export class QualityManager {
   private detectMobile(): boolean {
     if (typeof navigator === 'undefined') return false;
 
-    // Check user agent
+    // Check user agent for mobile devices
     const ua = navigator.userAgent || '';
     if (/Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
       return true;
     }
 
-    // Check touch support as fallback
-    if (typeof window !== 'undefined') {
-      return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    // Don't use maxTouchPoints alone - Macs with trackpads report > 0
+    // Only consider it mobile if UA also suggests mobile OR it's a small screen
+    if (typeof window !== 'undefined' && 'ontouchstart' in window) {
+      // Check if screen size suggests mobile (< 768px width is typical mobile breakpoint)
+      const screenWidth = window.screen?.width ?? 1920;
+      if (screenWidth < 768) {
+        return true;
+      }
     }
 
     return false;

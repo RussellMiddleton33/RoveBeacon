@@ -41,7 +41,9 @@ const DEFAULT_OPTIONS: Required<Omit<UserMarkerOptions, 'orientation'>> = {
   pulseSpeed: 0.3,
   fixedScreenSize: true,
   overallScale: 1.0,
-  ringScale: 0.7,
+  ringScale: 0.2,
+  ringInnerRadius: 15,
+  ringOuterRadius: 35,
   mapLibreModule: null,
 };
 
