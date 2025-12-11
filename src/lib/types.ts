@@ -119,8 +119,33 @@ export interface GeolocationEvents {
 export interface CoordinateConverter {
   /** Convert longitude/latitude to scene X/Y coordinates */
   toScene(longitude: number, latitude: number, altitude?: number): ScenePosition;
-  
+
   /** Convert scene X/Y back to longitude/latitude (optional) */
   fromScene?(x: number, y: number): { longitude: number; latitude: number };
 }
 
+/**
+ * Options for LocationMarkerController
+ */
+export interface LocationMarkerControllerOptions {
+  /** Options for the UserMarker visual */
+  markerOptions?: UserMarkerOptions;
+
+  /** Options for the GeolocationProvider */
+  geolocationOptions?: GeolocationOptions;
+
+  /** Venue/map center [longitude, latitude] - required for coordinate conversion */
+  center: [number, number];
+
+  /** Scale factor for coordinate conversion (default: 1) */
+  scale?: number;
+
+  /** Called on each location update */
+  onUpdate?: (location: LocationData) => void;
+
+  /** Called on geolocation errors */
+  onError?: (error: Error) => void;
+
+  /** Called when permission state changes */
+  onPermissionChange?: (state: PermissionState) => void;
+}
