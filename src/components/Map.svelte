@@ -1648,9 +1648,44 @@
 
   @media (max-width: 480px) {
     .location-info {
-      max-width: calc(100% - 20px);
+      max-width: 180px;
       left: 10px;
-      right: 10px;
+      right: auto;
+      padding: 10px;
+    }
+
+    .location-info .info-label {
+      font-size: 10px;
+      margin-bottom: 6px;
+    }
+
+    .location-info .speed-display {
+      margin: 2px 0;
+    }
+
+    .location-info .speed-value {
+      font-size: 16px;
+    }
+
+    .location-info .speed-unit {
+      font-size: 9px;
+    }
+
+    .location-info .heading-display {
+      font-size: 12px;
+    }
+
+    .location-info .location-grid {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+
+    .location-info .data-label {
+      font-size: 7px;
+    }
+
+    .location-info .data-value {
+      font-size: 9px;
     }
 
     .sdk-controls {
