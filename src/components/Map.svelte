@@ -61,8 +61,8 @@
   // Fixed screen size mode (like MapLibre)
   let fixedScreenSize = true;
 
-  // UI Control State
-  let showControls = true;
+  // UI Control State - default to hidden on mobile
+  let showControls = typeof window !== 'undefined' ? window.innerWidth > 768 : true;
   let showLocationPanel = true;
   let signalLostFadeStart = 10;
   let signalLostFadeDuration = 20;
@@ -1230,7 +1230,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
     font-size: 14px;
     cursor: pointer;
-    z-index: 1000;
+    z-index: 1002;
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
   }
