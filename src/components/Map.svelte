@@ -332,6 +332,7 @@
 
   let lastTileUpdate = 0;
   let lastLoadedZoom = -1;
+  let pendingTileLoads = 0; // Track pending tile loads for smooth transitions
 
   function updateTilesBasedOnView() {
     const now = Date.now();
@@ -347,19 +348,68 @@
     const zoomLevel = Math.floor(Math.log2(40000000 / height));
     const loadZoom = Math.max(2, Math.min(19, zoomLevel));
 
-    if (lastLoadedZoom !== -1 && lastLoadedZoom !== loadZoom) {
-      clearTiles();
-    }
+    // Only clear tiles after new ones are loaded (prevents flashing)
+    const zoomChanged = lastLoadedZoom !== -1 && lastLoadedZoom !== loadZoom;
+    const previousZoom = lastLoadedZoom;
     lastLoadedZoom = loadZoom;
 
     const centerTile = lngLatToTile(lng, lat, loadZoom);
     const range = 2;
 
+    // Collect tiles to load
+    const tilesToLoad: { x: number; y: number; z: number }[] = [];
     for (let x = centerTile.x - range; x <= centerTile.x + range; x++) {
       for (let y = centerTile.y - range; y <= centerTile.y + range; y++) {
-        loadTile(x, y, loadZoom);
+        const key = `${loadZoom}/${x}/${y}`;
+        if (!loadedTiles.has(key)) {
+          tilesToLoad.push({ x, y, z: loadZoom });
+        }
       }
     }
+
+    if (zoomChanged && tilesToLoad.length > 0) {
+      // Load new tiles first, then clear old ones after they're loaded
+      pendingTileLoads = tilesToLoad.length;
+      tilesToLoad.forEach((tile) => {
+        loadTile(tile.x, tile.y, tile.z, () => {
+          pendingTileLoads--;
+          if (pendingTileLoads === 0) {
+            // All new tiles loaded, now safe to clear old zoom level tiles
+            clearTilesForZoom(previousZoom);
+          }
+        });
+      });
+    } else {
+      // Same zoom level, just load new tiles normally
+      tilesToLoad.forEach((tile) => loadTile(tile.x, tile.y, tile.z));
+    }
+  }
+
+  function clearTilesForZoom(zoomLevel: number) {
+    const tilesToRemove: THREE.Object3D[] = [];
+    tileGroup.children.forEach((child) => {
+      if ((child as any).userData?.zoom === zoomLevel) {
+        tilesToRemove.push(child);
+      }
+    });
+
+    tilesToRemove.forEach((child) => {
+      tileGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.MeshBasicMaterial).map?.dispose();
+        (child.material as THREE.MeshBasicMaterial).dispose();
+      }
+    });
+
+    // Clear from loadedTiles set
+    const keysToRemove: string[] = [];
+    loadedTiles.forEach((key) => {
+      if (key.startsWith(`${zoomLevel}/`)) {
+        keysToRemove.push(key);
+      }
+    });
+    keysToRemove.forEach((key) => loadedTiles.delete(key));
   }
 
   function clearTiles() {
@@ -368,16 +418,19 @@
       tileGroup.remove(child);
       if (child instanceof THREE.Mesh) {
         child.geometry.dispose();
-        child.material.map?.dispose();
-        child.material.dispose();
+        (child.material as THREE.MeshBasicMaterial).map?.dispose();
+        (child.material as THREE.MeshBasicMaterial).dispose();
       }
     }
     loadedTiles.clear();
   }
 
-  function loadTile(x: number, y: number, z: number) {
+  function loadTile(x: number, y: number, z: number, onLoad?: () => void) {
     const key = `${z}/${x}/${y}`;
-    if (loadedTiles.has(key)) return;
+    if (loadedTiles.has(key)) {
+      onLoad?.();
+      return;
+    }
     loadedTiles.add(key);
 
     const bounds = tileToLngLatBounds(x, y, z);
@@ -394,15 +447,25 @@
     loader.crossOrigin = "anonymous";
     const url = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 
-    loader.load(url, (texture) => {
-      texture.generateMipmaps = true;
-      texture.minFilter = THREE.LinearMipMapLinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      const material = new THREE.MeshBasicMaterial({ map: texture });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(sceneX, sceneY, 0);
-      tileGroup.add(mesh);
-    });
+    loader.load(
+      url,
+      (texture) => {
+        texture.generateMipmaps = true;
+        texture.minFilter = THREE.LinearMipMapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(sceneX, sceneY, 0);
+        mesh.userData.zoom = z; // Track zoom level for cleanup
+        tileGroup.add(mesh);
+        onLoad?.();
+      },
+      undefined,
+      () => {
+        // Error loading tile, still call onLoad to prevent hanging
+        onLoad?.();
+      }
+    );
   }
 
   onMount(() => {
