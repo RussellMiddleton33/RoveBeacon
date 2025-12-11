@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MercatorProjection } from '../utils/MercatorProjection';
 import type { UserMarkerOptions, ScenePosition } from './types';
 
 const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
@@ -54,7 +55,8 @@ export class UserMarker extends THREE.Group {
   private pulsePhase = 0;
   private currentAccuracy = 10;
   private isVisible = false;
-  
+  private projection: MercatorProjection | null = null;
+
   constructor(options: UserMarkerOptions = {}) {
     super();
     this.options = { ...DEFAULT_OPTIONS, ...options };
