@@ -355,7 +355,7 @@ export class UserMarker extends THREE.Group {
       }
 
       const clampedAccuracy = Math.max(5, Math.min(100, this.currentAccuracy));
-      const accuracyScale = clampedAccuracy / 10;
+      const accuracyScale = clampedAccuracy / 20;
       const pulseAmount = 1 + Math.sin(this.pulsePhase) * 0.15;
       const finalScale = accuracyScale * pulseAmount;
 

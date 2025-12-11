@@ -1,17 +1,20 @@
 # 📍 RoveMaps "YouAreHere" Realtime Beacon SDK
 
-A Three.js "YOU ARE HERE" Blue Dot Experience SDK for displaying user location with GPS accuracy ring and direction indicator. Perfect for mapping applications, AR experiences, and location-based games. Customize Colors, Deobounce On Routing Lines. Easy To Use & Implement Into any Three.JS Application.
+[![npm version](https://img.shields.io/npm/v/rovemaps-you-are-here.svg)](https://www.npmjs.com/package/rovemaps-you-are-here)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Features Include:
+A Three.js "YOU ARE HERE" Blue Dot Experience SDK for displaying user location with GPS accuracy ring and direction indicator. Perfect for mapping applications, AR experiences, and location-based games. Customize Colors, Debounce On Routing Lines. Easy To Use & Implement Into any Three.JS Application.
 
-Visibility Controls
-Confidence State UI
-Altitude Modifications
-Snap To Routing 
-Debounce Effects
-Color Options
-Speed & Heading Visuals
-
+**Features Include:**
+- Visibility Controls
+- Confidence State UI (high/low/lost signal)
+- Altitude Modifications
+- Snap To Routing
+- Debounce Effects
+- Customizable Colors
+- Speed & Heading Visuals
+- Frame-rate independent animations
+- Input validation & security checks
 
 <p align="center">
   <a href="https://russellmiddleton33.github.io/RoveBeacon/">
@@ -25,7 +28,7 @@ Speed & Heading Visuals
   </a>
 </p>
 
-> **Note:** The demo requires location permissions and works best on mobile devices with GPS.
+> **Note:** The demo requires location permissions and works best on mobile devices with GPS. **HTTPS is required.**
 
 ---
 
@@ -41,9 +44,37 @@ Speed & Heading Visuals
 
 ## 📦 Installation
 
+### npm (Recommended)
+
 ```bash
 npm install rovemaps-you-are-here
 ```
+
+### CDN (No Build Step)
+
+For quick prototyping or static HTML pages, load directly from a CDN:
+
+```html
+<!-- Three.js (peer dependency) -->
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+
+<!-- RoveMaps You Are Here SDK -->
+<script src="https://unpkg.com/rovemaps-you-are-here@2.0.0/dist/rovemaps-you-are-here.umd.cjs"></script>
+
+<script>
+  // Access via global
+  const { YouAreHereController, UserMarker, GeolocationProvider } = RoveMapsYouAreHere;
+</script>
+```
+
+**CDN Options:**
+
+| CDN | URL |
+|-----|-----|
+| unpkg | `https://unpkg.com/rovemaps-you-are-here@2.0.0/dist/rovemaps-you-are-here.umd.cjs` |
+| jsDelivr | `https://cdn.jsdelivr.net/npm/rovemaps-you-are-here@2.0.0/dist/rovemaps-you-are-here.umd.cjs` |
+
+> **Tip:** Use `@^2.0.0` for auto-updates within major version, or pin to a specific version for production.
 
 ## 🚀 Quick Start
 > **Note:** The SDK assumes a **Z-Up** world by default (standard for mapping). If you are using a standard Three.js **Y-Up** scene, see [Advanced Usage](#-advanced-usage).
@@ -222,6 +253,10 @@ interface GeolocationOptions {
 | `isAvailable()` | Check if geolocation is supported |
 | `getPermissionState()` | Get current permission state |
 | `isWatching()` | Check if currently tracking |
+| `getLastLocation()` | Get most recent location without subscribing |
+| `isSecureContext()` | Check if HTTPS is available (required for geolocation) |
+| `removeAllListeners()` | Clear all event listeners at once |
+| `listenerCount(event)` | Get current listener count per event |
 | `dispose()` | Clean up |
 
 #### Events
@@ -282,8 +317,8 @@ npm run build:lib
 ```
 
 This outputs to `dist/`:
-- `threejs-user-location.js` - ES Module
-- `threejs-user-location.umd.cjs` - UMD bundle
+- `rovemaps-you-are-here.js` - ES Module
+- `rovemaps-you-are-here.umd.cjs` - UMD bundle (for CDN/script tags)
 - `*.d.ts` - TypeScript declarations
 
 ## 🌐 Browser Support
@@ -311,6 +346,34 @@ The SDK itself:
 - Does **not** store any data (localStorage, cookies, etc.)
 - Does **not** collect telemetry or analytics
 - Relies entirely on the browser's Geolocation API and permission system
+
+## 🆕 What's New in v2.0.0
+
+### Breaking Changes
+- Invalid coordinates now throw errors instead of silently failing
+- `MercatorProjection` and `YouAreHereController` validate inputs on construction
+
+### Bug Fixes
+- Fixed memory leak where animation loop continued after `stop()`
+- Fixed race condition when calling `start()` multiple times
+- Fixed heading normalization for GPS values > 360° or < 0°
+- Fixed altitude scaling (was incorrectly applying Mercator distortion)
+- Fixed event listener memory leaks
+
+### New Features
+- `setConfidence('high' | 'low' | 'lost')` - Indicate GPS signal quality
+- `getLastLocation()` - Get most recent location without subscribing
+- `isSecureContext()` - Check if HTTPS is available
+- Individual color setters: `setDotColor()`, `setBorderColor()`, `setRingColor()`
+- `hide()` / `show()` - Toggle marker visibility
+- `removeAllListeners()` / `listenerCount()` - Event listener management
+
+### Performance
+- Frame-rate independent animations using deltaTime
+- Update throttling (100ms minimum interval)
+- Set-based event listeners for O(1) operations
+
+See [CHANGELOG.md](./CHANGELOG.md) for full details.
 
 ## 📄 License
 
