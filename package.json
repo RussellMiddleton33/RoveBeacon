@@ -5,10 +5,10 @@
   "type": "module",
   "main": "./dist/threejs-user-location.umd.cjs",
   "module": "./dist/threejs-user-location.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/lib/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/lib/index.d.ts",
       "import": "./dist/threejs-user-location.js",
       "require": "./dist/threejs-user-location.umd.cjs"
     }
