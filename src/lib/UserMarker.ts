@@ -18,6 +18,7 @@ const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   smoothHeading: true,
   positionSmoothingFactor: 0.03,
   headingSmoothingFactor: 0.15,
+  orientation: 'z-up',
 };
 
 /**
@@ -40,13 +41,13 @@ const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
  */
 export class UserMarker extends THREE.Group {
   private options: Required<UserMarkerOptions>;
-  
+
   // Meshes
   private dotMesh!: THREE.Mesh;
   private borderMesh!: THREE.Mesh;
   private glowMesh!: THREE.Mesh;
   private coneGroup!: THREE.Group;
-  
+
   // Animation state
   private targetPosition = new THREE.Vector3();
   private lastPosition = new THREE.Vector3();
@@ -61,12 +62,19 @@ export class UserMarker extends THREE.Group {
     super();
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.createMarker();
+
+    // Handle Coordinate System Orientation
+    if (this.options.orientation === 'y-up') {
+      // Rotate 90 degrees so the XY plane becomes the XZ plane
+      this.rotation.x = -Math.PI / 2;
+    }
+
     this.visible = false; // Hidden until first position update
   }
-  
+
   private createMarker(): void {
     const { color, borderColor, dotSize, borderWidth, accuracyRingColor } = this.options;
-    
+
     // Accuracy/Glow Ring (pulsing, shows GPS accuracy)
     const glowGeometry = new THREE.RingGeometry(dotSize + borderWidth + 2, dotSize + borderWidth + 20, 64);
     const glowMaterial = new THREE.MeshBasicMaterial({
@@ -80,49 +88,49 @@ export class UserMarker extends THREE.Group {
     this.glowMesh.position.z = 0.05;
     this.glowMesh.visible = this.options.showAccuracyRing;
     this.add(this.glowMesh);
-    
+
     // White border/outline
     const borderGeometry = new THREE.CircleGeometry(dotSize + borderWidth, 32);
-    const borderMaterial = new THREE.MeshBasicMaterial({ 
-      color: borderColor, 
-      side: THREE.DoubleSide 
+    const borderMaterial = new THREE.MeshBasicMaterial({
+      color: borderColor,
+      side: THREE.DoubleSide
     });
     this.borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
     this.borderMesh.position.z = 0.1;
     this.add(this.borderMesh);
-    
+
     // Blue dot (main marker)
     const dotGeometry = new THREE.CircleGeometry(dotSize, 32);
-    const dotMaterial = new THREE.MeshBasicMaterial({ 
-      color, 
-      side: THREE.DoubleSide 
+    const dotMaterial = new THREE.MeshBasicMaterial({
+      color,
+      side: THREE.DoubleSide
     });
     this.dotMesh = new THREE.Mesh(dotGeometry, dotMaterial);
     this.dotMesh.position.z = 0.2;
     this.add(this.dotMesh);
-    
+
     // Direction cone (flashlight effect)
     this.coneGroup = this.createDirectionCone();
     this.coneGroup.visible = false;
     this.add(this.coneGroup);
   }
-  
+
   private createDirectionCone(): THREE.Group {
     const { color, coneLength, coneWidth, coneOpacity } = this.options;
     const group = new THREE.Group();
     const layers = 8;
-    
+
     for (let i = 0; i < layers; i++) {
       const t = i / (layers - 1);
       const layerLength = coneLength * (1 - t * 0.3);
       const layerWidth = coneWidth * (1 - t * 0.5);
-      
+
       const shape = new THREE.Shape();
       shape.moveTo(0, 0);
       shape.lineTo(-layerWidth / 2, layerLength);
       shape.lineTo(layerWidth / 2, layerLength);
       shape.lineTo(0, 0);
-      
+
       const geometry = new THREE.ShapeGeometry(shape);
       const material = new THREE.MeshBasicMaterial({
         color,
@@ -131,19 +139,19 @@ export class UserMarker extends THREE.Group {
         opacity: coneOpacity * (1 - t * 0.7),
         depthWrite: false,
       });
-      
+
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.z = 0.1 + t * 0.01;
       group.add(mesh);
     }
-    
+
     // Bright core
     const coreShape = new THREE.Shape();
     coreShape.moveTo(0, 0);
     coreShape.lineTo(-4, coneLength * 0.7);
     coreShape.lineTo(4, coneLength * 0.7);
     coreShape.lineTo(0, 0);
-    
+
     const coreGeometry = new THREE.ShapeGeometry(coreShape);
     const coreMaterial = new THREE.MeshBasicMaterial({
       color: 0x82b1ff,
@@ -155,11 +163,11 @@ export class UserMarker extends THREE.Group {
     const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
     coreMesh.position.z = 0.15;
     group.add(coreMesh);
-    
+
     group.position.z = 0.05;
     return group;
   }
-  
+
   /**
    * Set the marker position in scene coordinates
    */
@@ -169,33 +177,33 @@ export class UserMarker extends THREE.Group {
       console.warn('UserMarker.setPosition: Invalid coordinates ignored');
       return;
     }
-    
-    const newPos = new THREE.Vector3(x, y, z + 2); // Slight elevation
-    
+
+    // Reuse targetPosition to avoid allocation
+    this.targetPosition.set(x, y, z + 2); // Slight elevation
+
     if (!this.isVisible) {
       // First position - snap immediately
-      this.position.copy(newPos);
-      this.targetPosition.copy(newPos);
-      this.lastPosition.copy(newPos);
+      this.position.copy(this.targetPosition);
+      this.lastPosition.copy(this.targetPosition);
       this.visible = true;
       this.isVisible = true;
     } else if (this.options.smoothPosition) {
       // Smooth interpolation
       this.lastPosition.copy(this.position);
-      this.targetPosition.copy(newPos);
+      // targetPosition is already set above
       this.positionAlpha = 0;
     } else {
-      this.position.copy(newPos);
+      this.position.copy(this.targetPosition);
     }
   }
-  
+
   /**
    * Set position from ScenePosition object
    */
   setPositionFromScene(pos: ScenePosition): void {
     this.setPosition(pos.x, pos.y, pos.z ?? 0);
   }
-  
+
   /**
    * Set GPS accuracy in meters - affects the size of the accuracy ring
    */
@@ -206,7 +214,7 @@ export class UserMarker extends THREE.Group {
     }
     this.currentAccuracy = Math.min(meters, 10000); // Cap at 10km
   }
-  
+
   /**
    * Set heading and speed - shows direction cone when moving fast enough
    * @param heading Degrees from north (0-360), clockwise
@@ -214,7 +222,7 @@ export class UserMarker extends THREE.Group {
    */
   setHeading(heading: number | null, speed: number | null): void {
     const isMoving = (speed ?? 0) > this.options.minSpeedForDirection;
-    
+
     if (isMoving && heading !== null && !isNaN(heading)) {
       this.currentHeading = heading;
       this.coneGroup.visible = this.options.showDirectionCone;
@@ -223,7 +231,7 @@ export class UserMarker extends THREE.Group {
       this.coneGroup.visible = false;
     }
   }
-  
+
   /**
    * Update animation - call this in your render loop
    * @param deltaTime Time since last frame (optional, for future use)
@@ -235,41 +243,41 @@ export class UserMarker extends THREE.Group {
     if (this.options.smoothPosition && this.positionAlpha < 1) {
       this.positionAlpha = Math.min(1, this.positionAlpha + this.options.positionSmoothingFactor);
       this.position.lerpVectors(
-        this.lastPosition, 
-        this.targetPosition, 
+        this.lastPosition,
+        this.targetPosition,
         this.easeOutCubic(this.positionAlpha)
       );
     }
-    
+
     // Smooth heading interpolation
     if (this.currentHeading !== null && this.options.smoothHeading) {
       const targetRot = -THREE.MathUtils.degToRad(this.currentHeading);
       let currentRot = this.coneGroup.rotation.z;
       let diff = targetRot - currentRot;
-      
+
       // Handle wrap-around
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      
+
       this.coneGroup.rotation.z += diff * this.options.headingSmoothingFactor;
     }
-    
+
     // Accuracy ring pulse animation
     if (this.glowMesh.visible) {
       this.pulsePhase += 0.03;
-      
+
       const clampedAccuracy = Math.max(5, Math.min(100, this.currentAccuracy));
       const accuracyScale = clampedAccuracy / 10;
       const pulseAmount = 1 + Math.sin(this.pulsePhase) * 0.15;
       const finalScale = accuracyScale * pulseAmount;
-      
+
       this.glowMesh.scale.set(finalScale, finalScale, 1);
-      
+
       const baseOpacity = Math.max(0.1, 0.4 - (clampedAccuracy / 300));
-      (this.glowMesh.material as THREE.MeshBasicMaterial).opacity = 
+      (this.glowMesh.material as THREE.MeshBasicMaterial).opacity =
         baseOpacity + Math.sin(this.pulsePhase) * 0.1;
     }
-    
+
     // Scale marker based on camera distance (keeps consistent screen size)
     if (camera && cameraTarget) {
       const dist = camera.position.distanceTo(cameraTarget);
@@ -277,18 +285,18 @@ export class UserMarker extends THREE.Group {
       this.scale.set(scale, scale, 1);
     }
   }
-  
+
   private easeOutCubic(t: number): number {
     return 1 - Math.pow(1 - t, 3);
   }
-  
+
   /**
    * Show/hide the accuracy ring
    */
   setAccuracyRingVisible(visible: boolean): void {
     this.glowMesh.visible = visible;
   }
-  
+
   /**
    * Show/hide the direction cone (still requires movement to show)
    */
@@ -333,7 +341,7 @@ export class UserMarker extends THREE.Group {
     (this.dotMesh.material as THREE.MeshBasicMaterial).color.setHex(color);
     this.options.color = color;
   }
-  
+
   /**
    * Clean up resources
    */

@@ -6,8 +6,8 @@ export default defineConfig({
   build: {
     lib: {
       entry: resolve(__dirname, 'src/lib/index.ts'),
-      name: 'ThreeJSUserLocation',
-      fileName: 'threejs-user-location',
+      name: 'RoveMapsYouAreHere',
+      fileName: 'rovemaps-you-are-here',
     },
     rollupOptions: {
       // Externalize three.js - users must provide it

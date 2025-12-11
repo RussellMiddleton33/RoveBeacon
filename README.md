@@ -1,6 +1,6 @@
-# 📍 RoveBeacon
+# 📍 RoveMaps "YouAreHere" Realtime Beacon SDK
 
-A Three.js "YOU ARE HERE" Blue Dot Experience SDK for displaying user location with GPS accuracy ring and direction indicator. Perfect for mapping applications, AR experiences, and location-based games.
+A Three.js "YOU ARE HERE" Blue Dot Experience SDK for displaying user location with GPS accuracy ring and direction indicator. Perfect for mapping applications, AR experiences, and location-based games. Customize Colors, Deobounce On Routing Lines. Easy To Use & Implement Into any Three.JS Application.
 
 Features Include:
 
@@ -42,66 +42,67 @@ Speed & Heading Visuals
 ## 📦 Installation
 
 ```bash
-npm install rovebeacon three
+npm install rovemaps-you-are-here three
 ```
 
 ## 🚀 Quick Start
+> **Note:** The SDK assumes a **Z-Up** world by default (standard for mapping). If you are using a standard Three.js **Y-Up** scene, see [Advanced Usage](#-advanced-usage).
 
 ```typescript
 import * as THREE from 'three';
-import { UserMarker, GeolocationProvider } from 'rovebeacon';
+import { YouAreHereController } from 'rovemaps-you-are-here';
 
-// Create your Three.js scene
+// 1. Create your scene
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer();
 
-// Create the user marker and add to scene
-const marker = new UserMarker({
-  color: 0x4285F4,           // Google blue
-  showAccuracyRing: true,
-  showDirectionCone: true,
-  minSpeedForDirection: 0.5, // m/s - only show direction when walking
-});
-scene.add(marker);
-
-// Setup geolocation
-const geo = new GeolocationProvider({
-  enableHighAccuracy: true,
-});
-
-geo.on('update', (location) => {
-  // Convert lat/lng to your scene coordinates
-  const scenePos = convertToSceneCoords(location.longitude, location.latitude);
-  
-  marker.setPosition(scenePos.x, scenePos.y);
-  marker.setAccuracy(location.accuracy);
-  marker.setHeading(location.heading, location.speed);
-});
-
-geo.on('error', (error) => {
-  console.error('Location error:', error.message);
-});
-
-geo.on('permissionChange', (state) => {
-  if (state === 'denied') {
-    // Show UI to ask user to enable location
+// 2. Initialize the all-in-one controller
+const controller = new YouAreHereController({
+  // Center of your local map/venue (Longitude, Latitude)
+  center: [-74.006, 40.7128], 
+  // Scale usually matches your map implementation (e.g. Mapbox world scale)
+  scale: 1, 
+  markerOptions: {
+    color: 0x4285F4,
+    showAccuracyRing: true,
   }
 });
 
-// Start tracking
-geo.start();
+// 3. Start tracking
+await controller.start(scene);
 
-// Animation loop
-function animate() {
-  requestAnimationFrame(animate);
-  
-  // Update marker animations (accuracy pulse, smooth movement)
-  marker.update(undefined, camera, controls.target);
-  
-  renderer.render(scene, camera);
-}
-animate();
+// 4. Clean up when done
+// controller.dispose();
+```
+
+## 🔧 Advanced Usage
+
+### Y-Up Orientation (Standard Three.js)
+If your scene uses Y as up (default in Three.js), set the `orientation` option to `'y-up'`. This automatically rotates the marker to lie flat on the XZ plane.
+
+```typescript
+const marker = new UserMarker({
+  color: 0x4285F4,
+  orientation: 'y-up' // Critical for standard Three.js scenes
+});
+scene.add(marker);
+```
+
+### Manual Wiring (UserMarker + GeolocationProvider)
+For full control, you can instantiate components separately:
+
+```typescript
+import { UserMarker, GeolocationProvider } from 'rovebeacon';
+
+const marker = new UserMarker({ ... });
+scene.add(marker);
+
+const geo = new GeolocationProvider();
+geo.on('update', (loc) => {
+  // You need to handle coordinate conversion manually here
+  const { x, y } = myProjectionFunction(loc.longitude, loc.latitude);
+  marker.setPosition(x, y);
+});
+geo.start();
 ```
 
 ## 📖 API Reference

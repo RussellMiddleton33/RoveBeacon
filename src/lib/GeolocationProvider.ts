@@ -1,8 +1,8 @@
-import type { 
-  GeolocationOptions, 
-  LocationData, 
+import type {
+  GeolocationOptions,
+  LocationData,
   PermissionState,
-  GeolocationEvents 
+  GeolocationEvents
 } from './types';
 
 type EventCallback<T> = (data: T) => void;
@@ -49,24 +49,24 @@ export class GeolocationProvider {
     error: EventCallback<GeolocationPositionError | Error>[];
     permissionChange: EventCallback<PermissionState>[];
   } = {
-    update: [],
-    error: [],
-    permissionChange: [],
-  };
-  
+      update: [],
+      error: [],
+      permissionChange: [],
+    };
+
   constructor(options: GeolocationOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
   }
-  
+
   /**
    * Subscribe to events
    */
   on<K extends keyof GeolocationEvents>(
-    event: K, 
+    event: K,
     callback: EventCallback<GeolocationEvents[K]>
   ): () => void {
     this.listeners[event].push(callback as any);
-    
+
     // Return unsubscribe function
     return () => {
       const index = this.listeners[event].indexOf(callback as any);
@@ -75,12 +75,12 @@ export class GeolocationProvider {
       }
     };
   }
-  
+
   /**
    * Remove event listener
    */
   off<K extends keyof GeolocationEvents>(
-    event: K, 
+    event: K,
     callback: EventCallback<GeolocationEvents[K]>
   ): void {
     const index = this.listeners[event].indexOf(callback as any);
@@ -88,42 +88,42 @@ export class GeolocationProvider {
       this.listeners[event].splice(index, 1);
     }
   }
-  
+
   private emit<K extends keyof GeolocationEvents>(
-    event: K, 
+    event: K,
     data: GeolocationEvents[K]
   ): void {
     this.listeners[event].forEach((cb: any) => cb(data));
   }
-  
+
   private setPermissionState(state: PermissionState): void {
     if (this.permissionState !== state) {
       this.permissionState = state;
       this.emit('permissionChange', state);
     }
   }
-  
+
   /**
    * Check if geolocation is available
    */
   isAvailable(): boolean {
     return 'geolocation' in navigator;
   }
-  
+
   /**
    * Get current permission state
    */
   getPermissionState(): PermissionState {
     return this.permissionState;
   }
-  
+
   /**
    * Get number of location updates received
    */
   getUpdateCount(): number {
     return this.updateCount;
   }
-  
+
   /**
    * Start watching location
    * Returns a promise that resolves when permission is granted or rejects on error
@@ -135,19 +135,29 @@ export class GeolocationProvider {
       this.emit('error', error);
       throw error;
     }
-    
+
+    // Prevent multiple watches
+    if (this.watchId !== null) {
+      this.stop();
+    }
+
     // Check permission status if available
     if ('permissions' in navigator) {
       try {
         const result = await navigator.permissions.query({ name: 'geolocation' });
-        
+
         if (result.state === 'denied') {
           this.setPermissionState('denied');
           const error = new Error('Location permission denied');
           this.emit('error', error);
           throw error;
         }
-        
+
+        // Clean up previous listener if exists
+        if (this.permissionStatus) {
+          this.permissionStatus.onchange = null;
+        }
+
         // Store reference for cleanup and listen for permission changes
         this.permissionStatus = result;
         result.onchange = () => {
@@ -163,15 +173,15 @@ export class GeolocationProvider {
         // Silent fallback - no console logging in production
       }
     }
-    
+
     this.setPermissionState('requesting');
-    
+
     return new Promise((resolve, reject) => {
       this.watchId = navigator.geolocation.watchPosition(
         (position) => {
           this.setPermissionState('granted');
           this.updateCount++;
-          
+
           const locationData: LocationData = {
             longitude: position.coords.longitude,
             latitude: position.coords.latitude,
@@ -181,9 +191,9 @@ export class GeolocationProvider {
             heading: position.coords.heading,
             timestamp: position.timestamp,
           };
-          
+
           this.emit('update', locationData);
-          
+
           // Resolve on first successful position
           if (this.updateCount === 1) {
             resolve();
@@ -193,9 +203,9 @@ export class GeolocationProvider {
           if (error.code === error.PERMISSION_DENIED) {
             this.setPermissionState('denied');
           }
-          
+
           this.emit('error', error);
-          
+
           // Reject if this is the first call (permission denied)
           if (this.updateCount === 0) {
             reject(error);
@@ -209,7 +219,7 @@ export class GeolocationProvider {
       );
     });
   }
-  
+
   /**
    * Stop watching location
    */
@@ -219,7 +229,7 @@ export class GeolocationProvider {
       this.watchId = null;
     }
   }
-  
+
   /**
    * Get current position once (not continuous tracking)
    */
@@ -227,7 +237,7 @@ export class GeolocationProvider {
     if (!this.isAvailable()) {
       throw new Error('Geolocation is not supported');
     }
-    
+
     return new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -250,14 +260,14 @@ export class GeolocationProvider {
       );
     });
   }
-  
+
   /**
    * Check if currently watching
    */
   isWatching(): boolean {
     return this.watchId !== null;
   }
-  
+
   /**
    * Clean up all resources and listeners
    */

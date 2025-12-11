@@ -1,7 +1,7 @@
 // Main SDK exports
 export { UserMarker } from './UserMarker';
 export { GeolocationProvider } from './GeolocationProvider';
-export { LocationMarkerController } from './LocationMarkerController';
+export { YouAreHereController } from './YouAreHereController';
 
 // Utilities
 export { MercatorProjection } from '../utils/MercatorProjection';
@@ -15,6 +15,6 @@ export type {
   PermissionState,
   GeolocationEvents,
   CoordinateConverter,
-  LocationMarkerControllerOptions,
+  YouAreHereControllerOptions,
 } from './types';
 

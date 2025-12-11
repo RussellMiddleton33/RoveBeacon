@@ -1,16 +1,16 @@
 {
-  "name": "threejs-user-location",
-  "version": "1.0.0",
+  "name": "rovemaps-you-are-here",
+  "version": "1.1.0",
   "description": "A Three.js SDK for displaying user location with GPS accuracy and direction indicators",
   "type": "module",
-  "main": "./dist/threejs-user-location.umd.cjs",
-  "module": "./dist/threejs-user-location.js",
+  "main": "./dist/rovemaps-you-are-here.umd.cjs",
+  "module": "./dist/rovemaps-you-are-here.js",
   "types": "./dist/lib/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/lib/index.d.ts",
-      "import": "./dist/threejs-user-location.js",
-      "require": "./dist/threejs-user-location.umd.cjs"
+      "import": "./dist/rovemaps-you-are-here.js",
+      "require": "./dist/rovemaps-you-are-here.umd.cjs"
     }
   },
   "files": [
@@ -30,17 +30,16 @@
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tsconfig/svelte": "^5.0.6",
     "@types/node": "^24.10.1",
+    "@types/three": "^0.181.0",
     "@vitejs/plugin-basic-ssl": "^2.1.0",
     "svelte": "^5.43.8",
     "svelte-check": "^4.3.4",
+    "three": ">=0.150.0",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
     "vite-plugin-dts": "^4.5.4"
   },
-  "dependencies": {
-    "@types/three": "^0.181.0",
-    "three": ">=0.150.0"
-  },
+  "dependencies": {},
   "keywords": [
     "three.js",
     "threejs",

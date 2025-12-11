@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { UserMarker } from './UserMarker';
 import { GeolocationProvider } from './GeolocationProvider';
-import type { LocationMarkerControllerOptions } from './types';
+import type { YouAreHereControllerOptions } from './types';
 
 /**
  * All-in-one controller that manages geolocation + marker together.
@@ -9,7 +9,7 @@ import type { LocationMarkerControllerOptions } from './types';
  *
  * @example
  * ```typescript
- * const controller = new LocationMarkerController({
+ * const controller = new YouAreHereController({
  *   center: [-74.006, 40.7128], // NYC [lng, lat]
  *   markerOptions: { color: 0x4285F4 },
  *   onUpdate: (location) => console.log(location),
@@ -21,7 +21,7 @@ import type { LocationMarkerControllerOptions } from './types';
  * controller.dispose();
  * ```
  */
-export class LocationMarkerController {
+export class YouAreHereController {
   /** The UserMarker instance - access for customization */
   public readonly marker: UserMarker;
 
@@ -31,7 +31,7 @@ export class LocationMarkerController {
   private animationId: number | null = null;
   private isStarted = false;
 
-  constructor(options: LocationMarkerControllerOptions) {
+  constructor(options: YouAreHereControllerOptions) {
     // Create marker with projection pre-configured
     this.marker = new UserMarker(options.markerOptions);
     this.marker.setProjectionCenter(options.center, options.scale ?? 1);
