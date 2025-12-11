@@ -289,9 +289,23 @@ export interface UserMarkerOptions {
    * Independent scale multiplier for the accuracy ring/pulse
    * Use this to make the ring larger or smaller independently of the dot.
    * Values > 1 make it larger, < 1 make it smaller.
-   * @default 1.0
+   * @default 0.5
    */
   ringScale?: number;
+
+  /**
+   * Inner radius of the accuracy ring in scene units.
+   * This is the hole in the center of the ring (donut shape).
+   * @default 15
+   */
+  ringInnerRadius?: number;
+
+  /**
+   * Outer radius of the accuracy ring in scene units.
+   * This determines how large the ring appears before scaling.
+   * @default 35
+   */
+  ringOuterRadius?: number;
 
   /**
    * Optional reference to the maplibre-gl library.

@@ -58,15 +58,15 @@ const TARGET_DT_SEC = 0.016;
 const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   color: 0x4285F4,
   borderColor: 0xffffff,
-  dotSize: 9,
-  borderWidth: 3,
+  dotSize: 4,
+  borderWidth: 1,
   showAccuracyRing: true,
   showDirectionCone: true,
   minSpeedForDirection: 0.5,
   coneLength: 45,
   coneWidth: 70,
   coneOpacity: 0.2,
-  coneColor: 0x4285F4,
+  coneColor: 0xCBD4E2,
   accuracyRingColor: 0x4285F4,
   pulseSpeed: DEFAULT_PULSE_SPEED,
   smoothPosition: true,
@@ -85,7 +85,9 @@ const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   scaleCurveExponent: 0.5,
   fixedScreenSize: true,
   overallScale: 1.0,
-  ringScale: 0.5,
+  ringScale: 0.2,
+  ringInnerRadius: 15,
+  ringOuterRadius: 35,
   mapLibreModule: null,
 };
 
@@ -250,14 +252,14 @@ export class ThreeUserMarker extends THREE.Group {
     const { dotSize, borderWidth, borderColor } = this.options;
 
     // Accuracy Ring (pulsing glow) - donut shape so dot/border show through center
-    // Uses fixed inner radius independent of dot size, scaled by accuracy/ringScale
+    const { ringInnerRadius, ringOuterRadius } = this.options;
     this.ringGeometry = new THREE.RingGeometry(
-      15,  // Fixed inner radius
-      35,  // Fixed outer radius (scaled by accuracy)
-      64   // Segments
+      ringInnerRadius,  // Inner radius (hole in center)
+      ringOuterRadius,  // Outer radius (scaled by accuracy)
+      64                // Segments
     );
     // Solid circle for "lost" state - grows to show uncertainty area
-    this.lostCircleGeometry = new THREE.CircleGeometry(35, 64);
+    this.lostCircleGeometry = new THREE.CircleGeometry(ringOuterRadius, 64);
 
     this.glowMesh = new THREE.Mesh(this.ringGeometry, this.glowMaterials.high);
     this.glowMesh.position.z = 0.1;
@@ -297,18 +299,7 @@ export class ThreeUserMarker extends THREE.Group {
   private createDirectionCone(): THREE.Group {
     const { coneColor, coneLength, coneWidth, coneOpacity } = this.options;
 
-    // Check cache first
-    const cacheKey = `${coneColor}-${coneLength}-${coneWidth}-${coneOpacity}`;
-    const cachedGroup = CACHE.coneGeometries.get(cacheKey);
-
-    if (cachedGroup) {
-      // Clone the group structure but share geometry/materials where possible
-      // Note: We need a clone because we modify rotation/position/visibility per instance
-      // But we want to share the heavyweight geometry/materials
-      // Actually, standard clone() shares geometry and material by reference, which is what we want!
-      return cachedGroup.clone();
-    }
-
+    // Don't use cache - cone color can be changed dynamically via setConeColor()
     const group = new THREE.Group();
 
     // Create merged geometry for all cone layers (reduces draw calls from 9 to 2)
@@ -325,7 +316,7 @@ export class ThreeUserMarker extends THREE.Group {
       const t = i / (layers - 1);
       const layerLength = coneLength * (1 - t * 0.3);
       const layerWidth = coneWidth * (1 - t * 0.5);
-      const layerZ = 0.1 + t * 0.01;
+      const layerZ = 0.01 + t * 0.005; // Below the dot (0.1-0.12)
       const layerOpacity = coneOpacity * (1 - t * 0.7);
 
       // Triangle vertices for this layer
@@ -336,14 +327,9 @@ export class ThreeUserMarker extends THREE.Group {
       // Vertex 3: right edge
       positions.push(layerWidth / 2, layerLength, layerZ);
 
-      // Vertex colors with alpha encoded in RGB (we'll use material opacity for overall control)
-      // Use darker colors for outer layers to simulate opacity gradient
-      const blendedR = colorObj.r * layerOpacity + (1 - layerOpacity);
-      const blendedG = colorObj.g * layerOpacity + (1 - layerOpacity);
-      const blendedB = colorObj.b * layerOpacity + (1 - layerOpacity);
-
+      // Use the actual color for all vertices
       for (let v = 0; v < 3; v++) {
-        colors.push(blendedR, blendedG, blendedB);
+        colors.push(colorObj.r, colorObj.g, colorObj.b);
       }
     }
 
@@ -356,18 +342,19 @@ export class ThreeUserMarker extends THREE.Group {
       vertexColors: true,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 1, // Opacity is baked into vertex colors
+      opacity: coneOpacity, // Use actual opacity
       depthWrite: false,
     });
 
     const coneMesh = new THREE.Mesh(coneGeometry, coneMaterial);
+    coneMesh.renderOrder = -1; // Render before dot/border
     group.add(coneMesh);
 
     // Bright core (separate mesh for the highlight effect)
     const corePositions = [
-      0, 0, 0.15,
-      -4, coneLength * 0.7, 0.15,
-      4, coneLength * 0.7, 0.15
+      0, 0, 0.02,
+      -4, coneLength * 0.7, 0.02,
+      4, coneLength * 0.7, 0.02
     ];
     const coreColors = [
       coreColor.r, coreColor.g, coreColor.b,
@@ -387,15 +374,12 @@ export class ThreeUserMarker extends THREE.Group {
       depthWrite: false,
     });
     const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
+    coreMesh.renderOrder = -1; // Render before dot/border
     group.add(coreMesh);
 
-    group.position.z = 0.05;
+    group.position.z = 0.01; // Below the ring (0.1)
 
-    // Cache the prototype group
-    CACHE.coneGeometries.set(cacheKey, group);
-
-    // Return a clone for this instance
-    return group.clone();
+    return group;
   }
 
   /**
@@ -680,10 +664,10 @@ export class ThreeUserMarker extends THREE.Group {
 
         if (this.options.fixedScreenSize) {
           // Fixed screen size mode (like MapLibre):
-          // Use square root scaling for more natural zoom behavior
-          // This prevents marker from growing too large when zoomed out
+          // Use power curve scaling - 0.65 grows faster than sqrt (0.5) but slower than linear (1.0)
+          // This keeps marker visible when zoomed out without becoming too large
           const { scaleReferenceDistance, overallScale, minScale, maxScale } = this.options;
-          const rawScale = Math.sqrt(dist / scaleReferenceDistance) * overallScale;
+          const rawScale = Math.pow(dist / scaleReferenceDistance, 0.65) * overallScale;
           this.lastScale = Math.max(minScale, Math.min(maxScale, rawScale));
         } else {
           // Zoom-adaptive scaling algorithm:
@@ -1045,6 +1029,54 @@ export class ThreeUserMarker extends THREE.Group {
    */
   getRingScale(): number {
     return this.options.ringScale;
+  }
+
+  /**
+   * Set the ring size (inner and outer radius)
+   * Note: This recreates the ring geometry for the new size
+   * @param innerRadius Inner radius in scene units (hole size)
+   * @param outerRadius Outer radius in scene units
+   * @returns this for method chaining
+   */
+  setRingSize(innerRadius: number, outerRadius: number): this {
+    if (!isValidNumber(innerRadius) || innerRadius < 0) {
+      sdkWarn(`ThreeUserMarker.setRingSize: Invalid innerRadius value: ${innerRadius}`);
+      return this;
+    }
+    if (!isValidNumber(outerRadius) || outerRadius <= innerRadius) {
+      sdkWarn(`ThreeUserMarker.setRingSize: Invalid outerRadius value: ${outerRadius}`);
+      return this;
+    }
+
+    this.options.ringInnerRadius = innerRadius;
+    this.options.ringOuterRadius = outerRadius;
+
+    // Recreate ring geometry
+    this.ringGeometry.dispose();
+    this.ringGeometry = new THREE.RingGeometry(innerRadius, outerRadius, 64);
+
+    // Recreate lost circle geometry
+    this.lostCircleGeometry.dispose();
+    this.lostCircleGeometry = new THREE.CircleGeometry(outerRadius, 64);
+
+    // Update mesh if not in lost state
+    if (this.confidenceState !== 'lost') {
+      this.glowMesh.geometry = this.ringGeometry;
+    } else {
+      this.glowMesh.geometry = this.lostCircleGeometry;
+    }
+
+    return this;
+  }
+
+  /**
+   * Get the current ring size
+   */
+  getRingSize(): { innerRadius: number; outerRadius: number } {
+    return {
+      innerRadius: this.options.ringInnerRadius,
+      outerRadius: this.options.ringOuterRadius,
+    };
   }
 
   /**

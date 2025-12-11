@@ -38,20 +38,25 @@
   let dotColor = "#4285F4";
   let borderColor = "#ffffff";
   let ringColor = "#4285F4";
-  let coneColor = "#4285F4";
+  let coneColor = "#CBD4E2";
 
   // Marker height in meters
   let markerHeight = 0;
 
   // Marker scale, ring scale, pulse speed, dot size, and dot stroke
   let markerScale = 1;
-  let ringScale = 0.5;
+  let ringScale = 0.2;
   let pulseSpeed = 0.2;
-  let dotSize = 9;
-  let dotStrokeWidth = 3;
+  let dotSize = 4;
+  let dotStrokeWidth = 1;
 
   // Auto-confidence tracking
   let autoConfidenceEnabled = true;
+
+  // Simulation state
+  let simulatedHeading: number | null = null;
+  let simulatedCompass: number | null = null;
+  let simulationInterval: number | null = null;
 
   // Fixed screen size mode (like MapLibre)
   let fixedScreenSize = true;
@@ -171,9 +176,10 @@
         center: center,
         scale: SCENE_SCALE,
         markerOptions: {
-          color: parseInt(dotColor.replace("#", "0x")),
-          borderColor: parseInt(borderColor.replace("#", "0x")),
-          accuracyRingColor: parseInt(ringColor.replace("#", "0x")),
+          color: parseInt(dotColor.replace("#", ""), 16),
+          borderColor: parseInt(borderColor.replace("#", ""), 16),
+          accuracyRingColor: parseInt(ringColor.replace("#", ""), 16),
+          coneColor: parseInt(coneColor.replace("#", ""), 16),
           showAccuracyRing: true,
           showDirectionCone: true,
           orientation: "z-up", // Explicitly match our Z-up scene
@@ -287,19 +293,19 @@
   }
 
   function updateDotColor(color: string) {
-    controller?.marker.setDotColor(parseInt(color.replace("#", "0x")));
+    controller?.marker.setDotColor(parseInt(color.replace("#", ""), 16));
   }
 
   function updateBorderColor(color: string) {
-    controller?.marker.setBorderColor(parseInt(color.replace("#", "0x")));
+    controller?.marker.setBorderColor(parseInt(color.replace("#", ""), 16));
   }
 
   function updateRingColor(color: string) {
-    controller?.marker.setRingColor(parseInt(color.replace("#", "0x")));
+    controller?.marker.setRingColor(parseInt(color.replace("#", ""), 16));
   }
 
   function updateConeColor(color: string) {
-    controller?.marker.setConeColor(parseInt(color.replace("#", "0x")));
+    controller?.marker.setConeColor(parseInt(color.replace("#", ""), 16));
   }
 
   function updateMarkerHeight(height: number) {
@@ -348,6 +354,61 @@
     if (enabled) {
       controller.marker.resetAutoConfidence();
     }
+  }
+
+  // Simulation functions
+  function simulateHeading() {
+    if (!controller) return;
+    // Generate random heading and simulate movement
+    simulatedHeading = Math.random() * 360;
+    controller.marker.setHeading(simulatedHeading, 2.0); // 2 m/s to show cone
+  }
+
+  function simulateCompass() {
+    if (!controller) return;
+    // Generate random compass heading
+    simulatedCompass = Math.random() * 360;
+    controller.marker.setDeviceHeading(simulatedCompass);
+    controller.marker.setHeading(null, 0); // No GPS heading, stationary
+  }
+
+  function startRotatingHeading() {
+    if (!controller) return;
+    stopSimulation();
+    let angle = simulatedHeading ?? 0;
+    simulationInterval = window.setInterval(() => {
+      angle = (angle + 3) % 360; // Rotate 3 degrees per tick
+      simulatedHeading = angle;
+      controller.marker.setHeading(angle, 2.0);
+    }, 50);
+  }
+
+  function startRotatingCompass() {
+    if (!controller) return;
+    stopSimulation();
+    let angle = simulatedCompass ?? 0;
+    simulationInterval = window.setInterval(() => {
+      angle = (angle + 2) % 360; // Rotate 2 degrees per tick
+      simulatedCompass = angle;
+      controller.marker.setDeviceHeading(angle);
+      controller.marker.setHeading(null, 0);
+    }, 50);
+  }
+
+  function stopSimulation() {
+    if (simulationInterval !== null) {
+      clearInterval(simulationInterval);
+      simulationInterval = null;
+    }
+  }
+
+  function resetHeading() {
+    if (!controller) return;
+    stopSimulation();
+    simulatedHeading = null;
+    simulatedCompass = null;
+    controller.marker.resetDeviceHeading();
+    controller.marker.setHeading(null, 0);
   }
 
   // Exported methods for parent component to call
@@ -784,6 +845,27 @@
     </div>
 
     <div class="sdk-section">
+      <div class="sdk-section-title">Heading Simulation</div>
+      <div class="sdk-btn-group">
+        <button on:click={simulateHeading}>GPS Heading</button>
+        <button on:click={simulateCompass}>Compass</button>
+      </div>
+      <div class="sdk-btn-group" style="margin-top: 6px;">
+        <button on:click={startRotatingHeading}>🔄 Rotate GPS</button>
+        <button on:click={startRotatingCompass}>🔄 Rotate Compass</button>
+      </div>
+      <div class="sdk-btn-group" style="margin-top: 6px;">
+        <button on:click={resetHeading}>Reset</button>
+      </div>
+      {#if simulatedHeading !== null || simulatedCompass !== null}
+        <div class="sdk-info" style="margin-top: 6px; font-size: 11px; color: rgba(255,255,255,0.6);">
+          {#if simulatedHeading !== null}GPS: {simulatedHeading.toFixed(0)}°{/if}
+          {#if simulatedCompass !== null} Compass: {simulatedCompass.toFixed(0)}°{/if}
+        </div>
+      {/if}
+    </div>
+
+    <div class="sdk-section">
       <div class="sdk-section-title">Colors</div>
       <div class="sdk-color-row">
         <label for="dot-color">Dot</label>
@@ -826,25 +908,25 @@
     <div class="sdk-section">
       <div class="sdk-section-title">Marker Size & Pulse</div>
       <div class="sdk-slider-row">
-        <label for="marker-scale">Scale: {markerScale.toFixed(1)}x</label>
+        <label for="marker-scale">Scale: {markerScale.toFixed(2)}x</label>
         <input
           id="marker-scale"
           type="range"
-          min="0.5"
+          min="0.1"
           max="3"
-          step="0.1"
+          step="0.05"
           bind:value={markerScale}
           on:input={() => updateMarkerScale(markerScale)}
         />
       </div>
       <div class="sdk-slider-row">
-        <label for="ring-scale">Ring Scale: {ringScale.toFixed(1)}x</label>
+        <label for="ring-scale">Ring Scale: {ringScale.toFixed(2)}x</label>
         <input
           id="ring-scale"
           type="range"
-          min="0.5"
+          min="0.1"
           max="5"
-          step="0.1"
+          step="0.05"
           bind:value={ringScale}
           on:input={() => updateRingScale(ringScale)}
         />
