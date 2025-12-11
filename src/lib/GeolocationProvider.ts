@@ -41,7 +41,8 @@ export class GeolocationProvider {
   private watchId: number | null = null;
   private permissionState: PermissionState = 'prompt';
   private updateCount = 0;
-  
+  private permissionStatus: PermissionStatus | null = null;
+
   // Event listeners
   private listeners: {
     update: EventCallback<LocationData>[];
@@ -147,7 +148,8 @@ export class GeolocationProvider {
           throw error;
         }
         
-        // Listen for permission changes
+        // Store reference for cleanup and listen for permission changes
+        this.permissionStatus = result;
         result.onchange = () => {
           if (result.state === 'granted') {
             this.setPermissionState('granted');
@@ -257,10 +259,17 @@ export class GeolocationProvider {
   }
   
   /**
-   * Clean up
+   * Clean up all resources and listeners
    */
   dispose(): void {
     this.stop();
+
+    // Clean up permission status listener to prevent memory leak
+    if (this.permissionStatus) {
+      this.permissionStatus.onchange = null;
+      this.permissionStatus = null;
+    }
+
     this.listeners = {
       update: [],
       error: [],

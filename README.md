@@ -1,6 +1,17 @@
 # 📍 RoveBeacon
 
-A Three.js SDK for displaying user location with GPS accuracy ring and direction indicator. Perfect for mapping applications, AR experiences, and location-based games.
+A Three.js "YOU ARE HERE" Blue Dot Experience SDK for displaying user location with GPS accuracy ring and direction indicator. Perfect for mapping applications, AR experiences, and location-based games.
+
+Features Include:
+
+Visibility Controls
+Confidence State UI
+Altitude Modifications
+Snap To Routing 
+Debounce Effects
+Color Options
+Speed & Heading Visuals
+
 
 <p align="center">
   <a href="https://russellmiddleton33.github.io/RoveBeacon/">
@@ -104,7 +115,8 @@ A Three.js `Group` that displays the user's location.
 ```typescript
 interface UserMarkerOptions {
   color?: number;                    // Main dot color (default: 0x4285F4)
-  borderColor?: number;              // Border color (default: 0xffffff)
+  borderColor?: number;              // Border/stroke color (default: 0xffffff)
+  accuracyRingColor?: number;        // Ring and cone color (default: 0x4285F4)
   dotSize?: number;                  // Dot radius (default: 9)
   borderWidth?: number;              // Border width (default: 3)
   showAccuracyRing?: boolean;        // Show accuracy ring (default: true)
@@ -117,6 +129,10 @@ interface UserMarkerOptions {
   smoothHeading?: boolean;           // Enable smooth heading (default: true)
   positionSmoothingFactor?: number;  // Position lerp speed (default: 0.03)
   headingSmoothingFactor?: number;   // Heading lerp speed (default: 0.15)
+  // Confidence & Signal Loss
+  signalLostFadeStart?: number;      // Seconds before fade begins (default: 10)
+  signalLostFadeDuration?: number;   // Seconds for full fade out (default: 20)
+  autoFadeOnSignalLoss?: boolean;    // Auto-fade when GPS lost (default: true)
 }
 ```
 
@@ -128,10 +144,58 @@ interface UserMarkerOptions {
 | `setAccuracy(meters)` | Set GPS accuracy (affects ring size) |
 | `setHeading(degrees, speed)` | Set heading and speed (shows cone when moving) |
 | `update(dt?, camera?, target?)` | Update animations - call in render loop |
-| `setColor(hex)` | Change marker color |
 | `setAccuracyRingVisible(bool)` | Show/hide accuracy ring |
 | `setDirectionConeEnabled(bool)` | Enable/disable direction cone |
 | `dispose()` | Clean up resources |
+
+**Color Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `setDotColor(color)` | Change the main dot color (hex string or number) |
+| `setBorderColor(color)` | Change the border/stroke color |
+| `setRingColor(color)` | Change the accuracy ring, low-confidence circle, and direction cone color |
+
+**Visibility & Confidence Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `hide()` | Manually hide the marker |
+| `show()` | Show the marker after hiding |
+| `setAltitude(meters)` | Set marker altitude/Z position in meters |
+| `setConfidence(state)` | Set confidence state: `'high'`, `'low'`, or `'lost'` |
+
+#### Confidence States
+
+The marker supports three confidence states to reflect GPS signal quality:
+
+| State | Visual Behavior |
+|-------|-----------------|
+| `'high'` | Full opacity dot + border, pulsing accuracy ring, direction cone visible when moving |
+| `'low'` | 50% opacity dot + border, solid expanding circle (no pulse), direction cone hidden |
+| `'lost'` | Dot + border hidden, solid circle slowly expands and fades out over time |
+
+```typescript
+// Example: Handle poor GPS accuracy
+if (location.accuracy > 50) {
+  marker.setConfidence('low');
+} else {
+  marker.setConfidence('high');
+}
+
+// Example: Handle signal loss
+let lastUpdateTime = Date.now();
+geo.on('update', () => {
+  lastUpdateTime = Date.now();
+  marker.setConfidence('high');
+});
+
+setInterval(() => {
+  if (Date.now() - lastUpdateTime > 5000) {
+    marker.setConfidence('lost');
+  }
+}, 1000);
+```
 
 ### GeolocationProvider
 
@@ -231,6 +295,21 @@ This outputs to `dist/`:
 - Chrome for Android
 
 > **Note:** HTTPS is required for geolocation on most browsers.
+
+## 🔒 Privacy & Security
+
+**Location data is personally identifiable information (PII).** When using this SDK, you are responsible for:
+
+- **User consent** - Ensure users understand why location is being collected
+- **Data handling** - Don't log or transmit raw coordinates without user consent
+- **Storage** - If storing location history, encrypt it and provide deletion options
+- **Third parties** - Be transparent if location data is shared with analytics or other services
+
+The SDK itself:
+- Does **not** make any network requests
+- Does **not** store any data (localStorage, cookies, etc.)
+- Does **not** collect telemetry or analytics
+- Relies entirely on the browser's Geolocation API and permission system
 
 ## 📄 License
 
