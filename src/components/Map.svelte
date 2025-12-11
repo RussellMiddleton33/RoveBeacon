@@ -220,7 +220,18 @@
       // We need to convert to scene coords just for the camera target
       // The SDK handles the marker position automatically
       const pos = projection.lngLatToScene(loc.longitude, loc.latitude);
-      controls.target.lerp(new THREE.Vector3(pos[0], pos[1], 0), 0.1);
+      const targetPos = new THREE.Vector3(pos[0], pos[1], 0);
+
+      // On first location update, snap camera immediately to user position
+      if (locationInfo.updateCount === 1) {
+        controls.target.copy(targetPos);
+        // Also move camera position to maintain relative offset
+        const offset = camera.position.clone().sub(controls.target);
+        camera.position.copy(targetPos).add(offset);
+      } else {
+        // Subsequent updates: smooth lerp
+        controls.target.lerp(targetPos, 0.1);
+      }
     }
   }
 
