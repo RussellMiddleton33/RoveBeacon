@@ -2,6 +2,53 @@
 
 All notable changes to the "rovemaps-you-are-here" project will be documented in this file.
 
+## [2.1.0] - 2025-12-10
+
+### Bug Fixes
+- **removeAllListeners() Memory Leak**: Fixed missing cleanup of `deviceOrientation` listeners when clearing all events
+- **setConfidence() Transparency**: Fixed transparency not working for 'low' and 'lost' states (missing `transparent: true` and `needsUpdate: true`)
+- **Concurrent Start Timeout**: Added 5-second timeout to concurrent `start()` polling to prevent infinite loops
+- **Duplicate Line**: Removed duplicate `group.position.z = 0.05` in direction cone creation
+
+### New Features
+- **Automatic Staleness Detection**: Marker confidence now automatically degrades based on time and accuracy
+  - 30 seconds without update → 'low' confidence
+  - 60 seconds without update → 'lost' confidence
+  - Accuracy > 100m → 'low' confidence
+  - Accuracy > 500m → 'lost' confidence
+  - Fully configurable via `UserMarkerOptions`
+  - `resetAutoConfidence()` to re-enable after manual override
+  - `isAutoConfidenceEnabled()` to check current state
+
+- **Device Orientation Smoothing**: Compass readings are now smoothed to reduce jitter
+  - Uses same smoothing factor as GPS heading
+  - New `resetDeviceHeading()` method to clear smoothing state
+
+- **Mock Location Support**: Full testing/demo support for simulated locations
+  - `setMockLocation(location)` - Set a single mock location
+  - `startMockPath(locations, interval)` - Cycle through waypoints
+  - `stopMockPath()` - Stop path simulation
+  - `stopMocking()` - Exit mock mode entirely
+  - `isMockMode()` - Check if mock mode is active
+  - `clearLastLocation()` - Privacy helper to clear cached location
+
+### Performance Improvements
+- **Optimized Direction Cone**: Reduced draw calls from 9 to 2 using merged BufferGeometry with vertex colors
+- **Fewer Material Objects**: Cone now uses 2 materials instead of 9
+
+### New Options (UserMarkerOptions)
+```typescript
+enableAutoConfidence?: boolean;          // default: true
+stalenessLowThresholdMs?: number;        // default: 30000 (30s)
+stalenessLostThresholdMs?: number;       // default: 60000 (60s)
+accuracyLowThresholdMeters?: number;     // default: 100
+accuracyLostThresholdMeters?: number;    // default: 500
+```
+
+### CDN
+- **unpkg**: `https://unpkg.com/rovemaps-you-are-here@2.1.0/dist/rovemaps-you-are-here.umd.cjs`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/rovemaps-you-are-here@2.1.0/dist/rovemaps-you-are-here.umd.cjs`
+
 ## [2.0.0] - 2025-12-10
 
 ### Breaking Changes

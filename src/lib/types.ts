@@ -114,6 +114,38 @@ export interface UserMarkerOptions {
    * @default 'z-up'
    */
   orientation?: 'z-up' | 'y-up';
+
+  /**
+   * Enable automatic confidence state based on staleness and accuracy
+   * When enabled, confidence will automatically degrade to 'low' or 'lost'
+   * based on time since last update and GPS accuracy
+   * @default true
+   */
+  enableAutoConfidence?: boolean;
+
+  /**
+   * Time in milliseconds after which confidence degrades to 'low'
+   * @default 30000 (30 seconds)
+   */
+  stalenessLowThresholdMs?: number;
+
+  /**
+   * Time in milliseconds after which confidence degrades to 'lost'
+   * @default 60000 (60 seconds)
+   */
+  stalenessLostThresholdMs?: number;
+
+  /**
+   * Accuracy in meters above which confidence degrades to 'low'
+   * @default 100
+   */
+  accuracyLowThresholdMeters?: number;
+
+  /**
+   * Accuracy in meters above which confidence degrades to 'lost'
+   * @default 500
+   */
+  accuracyLostThresholdMeters?: number;
 }
 
 /**
@@ -228,6 +260,8 @@ export interface GeolocationEvents {
   error: GeolocationPositionError | Error;
   /** Fired when the permission state changes */
   permissionChange: PermissionState;
+  /** Fired when device orientation changes (compass) */
+  deviceOrientation: DeviceOrientationEvent;
 }
 
 /**
@@ -310,4 +344,14 @@ export interface YouAreHereControllerOptions {
    * @param state The new permission state
    */
   onPermissionChange?: (state: PermissionState) => void;
+
+  /**
+   * Enable device compass (magnetometer) integration
+   * 
+   * If true, the SDK will listen for device orientation events to rotate the marker
+   * when stationary. On iOS, this requires calling `requestPermissions()` from a user action.
+   * 
+   * @default true
+   */
+  enableCompass?: boolean;
 }

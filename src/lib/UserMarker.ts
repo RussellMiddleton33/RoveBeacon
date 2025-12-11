@@ -34,6 +34,18 @@ const DEFAULT_ACCURACY_METERS = 10;
  */
 const MAX_ACCURACY_METERS = 10000;
 
+/**
+ * Time thresholds for automatic staleness detection (in milliseconds)
+ */
+const STALENESS_LOW_THRESHOLD_MS = 30000;  // 30 seconds -> 'low' confidence
+const STALENESS_LOST_THRESHOLD_MS = 60000; // 60 seconds -> 'lost' confidence
+
+/**
+ * Accuracy thresholds for automatic confidence degradation (in meters)
+ */
+const ACCURACY_LOW_THRESHOLD_METERS = 100;  // >100m accuracy -> 'low' confidence
+const ACCURACY_LOST_THRESHOLD_METERS = 500; // >500m accuracy -> 'lost' confidence
+
 const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   color: 0x4285F4,
   borderColor: 0xffffff,
@@ -51,6 +63,11 @@ const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   positionSmoothingFactor: 0.03,
   headingSmoothingFactor: 0.15,
   orientation: 'z-up',
+  enableAutoConfidence: true,
+  stalenessLowThresholdMs: STALENESS_LOW_THRESHOLD_MS,
+  stalenessLostThresholdMs: STALENESS_LOST_THRESHOLD_MS,
+  accuracyLowThresholdMeters: ACCURACY_LOW_THRESHOLD_METERS,
+  accuracyLostThresholdMeters: ACCURACY_LOST_THRESHOLD_METERS,
 };
 
 /**
@@ -101,12 +118,18 @@ export class UserMarker extends THREE.Group {
   private projection: MercatorProjection | null = null;
   private isDisposed = false;
 
+  // Device orientation state
+  private deviceHeading: number | null = null;
+  private useCompasHeading = true;
+
   // Cached values to avoid per-frame allocations
   private lastCameraDistance = 0;
   private lastScale = 1;
 
   // Confidence state for GPS quality indication
   private confidenceState: ConfidenceState = 'high';
+  private manualConfidenceOverride = false; // If true, auto-confidence is disabled
+  private lastPositionUpdateTime = 0; // Timestamp of last position update for staleness detection
 
   constructor(options: UserMarkerOptions = {}) {
     super();
@@ -168,54 +191,93 @@ export class UserMarker extends THREE.Group {
   private createDirectionCone(): THREE.Group {
     const { color, coneLength, coneWidth, coneOpacity } = this.options;
     const group = new THREE.Group();
+
+    // Create merged geometry for all cone layers (reduces draw calls from 9 to 2)
     const layers = 8;
+    const positions: number[] = [];
+    const colors: number[] = [];
+
+    // Convert hex color to RGB components
+    const colorObj = new THREE.Color(color);
+    const coreColor = new THREE.Color(0x82b1ff);
 
     for (let i = 0; i < layers; i++) {
       const t = i / (layers - 1);
       const layerLength = coneLength * (1 - t * 0.3);
       const layerWidth = coneWidth * (1 - t * 0.5);
+      const layerZ = 0.1 + t * 0.01;
+      const layerOpacity = coneOpacity * (1 - t * 0.7);
 
-      const shape = new THREE.Shape();
-      shape.moveTo(0, 0);
-      shape.lineTo(-layerWidth / 2, layerLength);
-      shape.lineTo(layerWidth / 2, layerLength);
-      shape.lineTo(0, 0);
+      // Triangle vertices for this layer
+      // Vertex 1: origin
+      positions.push(0, 0, layerZ);
+      // Vertex 2: left edge
+      positions.push(-layerWidth / 2, layerLength, layerZ);
+      // Vertex 3: right edge
+      positions.push(layerWidth / 2, layerLength, layerZ);
 
-      const geometry = new THREE.ShapeGeometry(shape);
-      const material = new THREE.MeshBasicMaterial({
-        color,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: coneOpacity * (1 - t * 0.7),
-        depthWrite: false,
-      });
+      // Vertex colors with alpha encoded in RGB (we'll use material opacity for overall control)
+      // Use darker colors for outer layers to simulate opacity gradient
+      const blendedR = colorObj.r * layerOpacity + (1 - layerOpacity);
+      const blendedG = colorObj.g * layerOpacity + (1 - layerOpacity);
+      const blendedB = colorObj.b * layerOpacity + (1 - layerOpacity);
 
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.z = 0.1 + t * 0.01;
-      group.add(mesh);
+      for (let v = 0; v < 3; v++) {
+        colors.push(blendedR, blendedG, blendedB);
+      }
     }
 
-    // Bright core
-    const coreShape = new THREE.Shape();
-    coreShape.moveTo(0, 0);
-    coreShape.lineTo(-4, coneLength * 0.7);
-    coreShape.lineTo(4, coneLength * 0.7);
-    coreShape.lineTo(0, 0);
+    // Create BufferGeometry for cone layers
+    const coneGeometry = new THREE.BufferGeometry();
+    coneGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    coneGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
-    const coreGeometry = new THREE.ShapeGeometry(coreShape);
+    const coneMaterial = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 1, // Opacity is baked into vertex colors
+      depthWrite: false,
+    });
+
+    const coneMesh = new THREE.Mesh(coneGeometry, coneMaterial);
+    group.add(coneMesh);
+
+    // Bright core (separate mesh for the highlight effect)
+    const corePositions = [
+      0, 0, 0.15,
+      -4, coneLength * 0.7, 0.15,
+      4, coneLength * 0.7, 0.15
+    ];
+    const coreColors = [
+      coreColor.r, coreColor.g, coreColor.b,
+      coreColor.r, coreColor.g, coreColor.b,
+      coreColor.r, coreColor.g, coreColor.b
+    ];
+
+    const coreGeometry = new THREE.BufferGeometry();
+    coreGeometry.setAttribute('position', new THREE.Float32BufferAttribute(corePositions, 3));
+    coreGeometry.setAttribute('color', new THREE.Float32BufferAttribute(coreColors, 3));
+
     const coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0x82b1ff,
+      vertexColors: true,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.3,
       depthWrite: false,
     });
     const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
-    coreMesh.position.z = 0.15;
     group.add(coreMesh);
 
     group.position.z = 0.05;
     return group;
+  }
+
+  /**
+   * Get the projection instance used for coordinate conversion
+   */
+  getProjection(): MercatorProjection | null {
+    return this.projection;
   }
 
   /**
@@ -227,6 +289,9 @@ export class UserMarker extends THREE.Group {
       console.warn('UserMarker.setPosition: Invalid coordinates ignored');
       return;
     }
+
+    // Track last position update time for staleness detection
+    this.lastPositionUpdateTime = Date.now();
 
     // Reuse targetPosition to avoid allocation
     this.targetPosition.set(x, y, z + 2); // Slight elevation
@@ -270,6 +335,44 @@ export class UserMarker extends THREE.Group {
   }
 
   /**
+   * Set heading from device orientation (compass)
+   * This is used when GPS heading is not available or user is stationary
+   * Automatically smooths noisy compass readings for a stable experience
+   * @param heading Compass heading in degrees (0-360)
+   */
+  setDeviceHeading(heading: number | null): void {
+    if (!isValidNumber(heading)) {
+      this.deviceHeading = null;
+      return;
+    }
+
+    const normalizedHeading = normalizeAngleDegrees(heading);
+
+    if (this.deviceHeading === null) {
+      // First reading - set directly
+      this.deviceHeading = normalizedHeading;
+    } else {
+      // Smooth noisy compass readings using the same smoothing as GPS heading
+      // Calculate shortest angular difference
+      let diff = normalizedHeading - this.deviceHeading;
+      while (diff > 180) diff -= 360;
+      while (diff < -180) diff += 360;
+
+      // Apply smoothing factor (use heading smoothing factor for consistency)
+      // Lower factor = more smoothing = less jitter
+      const smoothingFactor = this.options.headingSmoothingFactor;
+      this.deviceHeading = normalizeAngleDegrees(this.deviceHeading + diff * smoothingFactor);
+    }
+  }
+
+  /**
+   * Reset device heading smoothing (useful when re-acquiring compass lock)
+   */
+  resetDeviceHeading(): void {
+    this.deviceHeading = null;
+  }
+
+  /**
    * Set heading and speed - shows direction cone when moving fast enough
    * @param heading Degrees from north (0-360), clockwise. Values outside this range are normalized.
    * @param speed Speed in m/s
@@ -277,13 +380,23 @@ export class UserMarker extends THREE.Group {
   setHeading(heading: number | null, speed: number | null): void {
     const isMoving = isValidNumber(speed) && speed > this.options.minSpeedForDirection;
 
+    // Determine which heading to use
+    let activeHeading: number | null = null;
+
     if (isMoving && isValidNumber(heading)) {
-      // Normalize heading to [0, 360) to handle GPS values > 360 or < 0
-      const normalizedHeading = normalizeAngleDegrees(heading);
-      this.currentHeading = normalizedHeading;
+      // Prioritize GPS heading when moving
+      activeHeading = normalizeAngleDegrees(heading);
+    } else if (this.deviceHeading !== null) {
+      // Fallback to compass when stationary
+      activeHeading = this.deviceHeading;
+    }
+
+    if (activeHeading !== null) {
+      // Update internal state
+      this.currentHeading = activeHeading;
 
       // Convert to radians for rotation (negative because rotation is counter-clockwise)
-      this.targetHeadingRadians = -THREE.MathUtils.degToRad(normalizedHeading);
+      this.targetHeadingRadians = -THREE.MathUtils.degToRad(activeHeading);
 
       // On first heading, snap immediately instead of interpolating from 0
       if (this.isFirstHeading) {
@@ -294,10 +407,18 @@ export class UserMarker extends THREE.Group {
 
       this.coneGroup.visible = this.options.showDirectionCone;
     } else {
-      this.currentHeading = null;
-      this.coneGroup.visible = false;
-      // Don't reset isFirstHeading here - we want to snap when heading becomes valid again
-      // after being null, but that's handled by the fact that we track currentHeadingRadians
+      // Keep showing last known heading if we have neither, or hide if we never had one?
+      // Current behavior: hide if we are not moving and have no compass
+      if (!isMoving && this.deviceHeading === null) {
+        this.coneGroup.visible = false;
+      } else {
+        // If we have compass (handled above) or are just stopped but want to show last heading?
+        // For now, let's keep it simple: if no active heading source, hide cone
+        // But wait, the logic above handles `activeHeading !== null`.
+        // So here means activeHeading IS null.
+        this.currentHeading = null;
+        this.coneGroup.visible = false;
+      }
     }
   }
 
@@ -312,6 +433,11 @@ export class UserMarker extends THREE.Group {
 
     // Default to 16ms (~60fps) if deltaTime not provided for backwards compatibility
     const dt = isValidNumber(deltaTime) && deltaTime > 0 ? deltaTime : 0.016;
+
+    // Auto-confidence: Check for staleness and accuracy degradation
+    if (this.options.enableAutoConfidence && !this.manualConfidenceOverride && this.lastPositionUpdateTime > 0) {
+      this.updateAutoConfidence();
+    }
 
     // Smooth position interpolation
     if (this.options.smoothPosition && this.positionAlpha < 1) {
@@ -383,6 +509,42 @@ export class UserMarker extends THREE.Group {
 
   private easeOutCubic(t: number): number {
     return 1 - Math.pow(1 - t, 3);
+  }
+
+  /**
+   * Automatically update confidence based on staleness and accuracy
+   * Called every frame when enableAutoConfidence is true
+   */
+  private updateAutoConfidence(): void {
+    const now = Date.now();
+    const timeSinceUpdate = now - this.lastPositionUpdateTime;
+
+    // Determine confidence based on staleness (time since last update)
+    let stalenessConfidence: ConfidenceState = 'high';
+    if (timeSinceUpdate >= this.options.stalenessLostThresholdMs) {
+      stalenessConfidence = 'lost';
+    } else if (timeSinceUpdate >= this.options.stalenessLowThresholdMs) {
+      stalenessConfidence = 'low';
+    }
+
+    // Determine confidence based on accuracy
+    let accuracyConfidence: ConfidenceState = 'high';
+    if (this.currentAccuracy >= this.options.accuracyLostThresholdMeters) {
+      accuracyConfidence = 'lost';
+    } else if (this.currentAccuracy >= this.options.accuracyLowThresholdMeters) {
+      accuracyConfidence = 'low';
+    }
+
+    // Use the worse of the two confidence levels
+    const confidencePriority: Record<ConfidenceState, number> = { 'high': 0, 'low': 1, 'lost': 2 };
+    const newConfidence = confidencePriority[stalenessConfidence] >= confidencePriority[accuracyConfidence]
+      ? stalenessConfidence
+      : accuracyConfidence;
+
+    // Only update if changed (avoids redundant material updates)
+    if (newConfidence !== this.confidenceState) {
+      this.applyConfidenceState(newConfidence);
+    }
   }
 
   /**
@@ -473,12 +635,39 @@ export class UserMarker extends THREE.Group {
   }
 
   /**
-   * Set the confidence/signal quality state
+   * Set the confidence/signal quality state manually
    * Affects visual appearance to indicate GPS reliability
+   *
+   * Note: Calling this method disables automatic confidence updates.
+   * Call resetAutoConfidence() to re-enable automatic updates.
    *
    * @param state 'high' = good signal, 'low' = degraded, 'lost' = no signal
    */
   setConfidence(state: ConfidenceState): void {
+    // Manual confidence call disables auto-confidence
+    this.manualConfidenceOverride = true;
+    this.applyConfidenceState(state);
+  }
+
+  /**
+   * Re-enable automatic confidence updates based on staleness and accuracy
+   * Call this after using setConfidence() manually to restore automatic behavior
+   */
+  resetAutoConfidence(): void {
+    this.manualConfidenceOverride = false;
+  }
+
+  /**
+   * Check if automatic confidence is currently enabled
+   */
+  isAutoConfidenceEnabled(): boolean {
+    return this.options.enableAutoConfidence && !this.manualConfidenceOverride;
+  }
+
+  /**
+   * Apply confidence state to visual elements (shared by manual and auto)
+   */
+  private applyConfidenceState(state: ConfidenceState): void {
     if (this.confidenceState === state) return;
     this.confidenceState = state;
 
@@ -488,21 +677,30 @@ export class UserMarker extends THREE.Group {
     switch (state) {
       case 'high':
         // Normal appearance - use configured color
-        dotMaterial.color.setHex(this.options.color);
+        dotMaterial.transparent = false;
         dotMaterial.opacity = 1;
+        dotMaterial.color.setHex(this.options.color);
+        dotMaterial.needsUpdate = true;
         glowMaterial.color.setHex(this.options.accuracyRingColor);
+        this.coneGroup.visible = this.options.showDirectionCone && this.currentHeading !== null;
         break;
       case 'low':
-        // Degraded - slightly faded
-        dotMaterial.color.setHex(this.options.color);
+        // Degraded - slightly faded with orange warning ring
+        dotMaterial.transparent = true;
         dotMaterial.opacity = 0.7;
+        dotMaterial.color.setHex(this.options.color);
+        dotMaterial.needsUpdate = true;
         glowMaterial.color.setHex(0xffa500); // Orange tint for warning
+        this.coneGroup.visible = false; // Hide cone when signal is degraded
         break;
       case 'lost':
         // Lost signal - grayed out
-        dotMaterial.color.setHex(0x888888); // Gray
+        dotMaterial.transparent = true;
         dotMaterial.opacity = 0.5;
+        dotMaterial.color.setHex(0x888888); // Gray
+        dotMaterial.needsUpdate = true;
         glowMaterial.color.setHex(0x888888); // Gray
+        this.coneGroup.visible = false; // Hide cone when signal is lost
         break;
     }
   }

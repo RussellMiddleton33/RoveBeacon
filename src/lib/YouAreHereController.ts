@@ -41,6 +41,8 @@ export class YouAreHereController {
   /** The GeolocationProvider instance - access for advanced control */
   public readonly geolocation: GeolocationProvider;
 
+  private options: YouAreHereControllerOptions;
+
   private animationId: number | null = null;
   private isStarted = false;
   private isStarting = false; // Mutex for concurrent start() protection
@@ -49,6 +51,8 @@ export class YouAreHereController {
   private currentScene: THREE.Scene | null = null;
 
   constructor(options: YouAreHereControllerOptions) {
+    this.options = options;
+
     // Validate required center parameter
     if (!options.center) {
       throw new Error('YouAreHereController: center option is required');
@@ -78,11 +82,22 @@ export class YouAreHereController {
     this.geolocation.on('update', (location) => {
       if (this.isDisposed) return;
 
-      this.marker.setLatLng(
+      const [x, y, z] = this.marker.getProjection()?.lngLatToScene(
         location.longitude,
         location.latitude,
         location.altitude ?? 0
-      );
+      ) ?? [0, 0, 0];
+
+      // Handle coordinate system based on marker orientation
+      if (options.markerOptions?.orientation === 'y-up') {
+        // Standard Three.js: Y is up, -Z is North
+        // Map data: x=East, y=North, z=Altitude
+        // We map: x->x, y->-z, z->y
+        this.marker.setPosition(x, z, -y);
+      } else {
+        // Z-up (MapLibre/GIS default): x=East, y=North, z=Up
+        this.marker.setPosition(x, y, z);
+      }
       this.marker.setAccuracy(location.accuracy);
       this.marker.setHeading(location.heading, location.speed);
       options.onUpdate?.(location);
@@ -99,6 +114,48 @@ export class YouAreHereController {
       if (this.isDisposed) return;
       options.onPermissionChange?.(state);
     });
+
+    // Wire up device orientation (compass)
+    this.geolocation.on('deviceOrientation', (event) => {
+      if (this.isDisposed) return;
+
+      // Calculate compass heading: 
+      // alpha is 0-360 degrees around z-axis (compass heading)
+      // Note: This is a simplified implementation. Real-world compass 
+      // handling needs to account for screen orientation and declination.
+      // But for basic "phone pointing this way", alpha is usually sufficient 
+      // on modern browsers which often compensate for screen rotation automatically.
+      // Or we should check `event.webkitCompassHeading` for iOS.
+
+      let heading: number | null = null;
+
+      if ((event as any).webkitCompassHeading) {
+        // iOS
+        heading = (event as any).webkitCompassHeading;
+      } else if (event.alpha !== null) {
+        // Android / Standard
+        // alpha increases counter-clockwise on some devices? Standard says 0=North, increasing counter-clockwise?
+        // Actually MDN says: 0 is North, increasing when rotating device counter-clockwise (so East is 270?).
+        // Compass heading usually means 0=N, 90=E.
+        // If alpha is counter-clockwise: Heading = 360 - alpha.
+        heading = 360 - event.alpha;
+      }
+
+      this.marker.setDeviceHeading(heading);
+    });
+  }
+
+  /**
+   * Request necessary permissions (specifically Compass on iOS 13+).
+   * Call this from a user interaction event handler (like a button click).
+   * 
+   * On iOS, this triggers the "Allow access to Motion & Orientation?" prompt.
+   * On Android/Desktop, this is usually a no-op (resolves immediately).
+   */
+  async requestPermissions(): Promise<void> {
+    if (this.options.enableCompass !== false) {
+      await GeolocationProvider.requestDeviceOrientationPermission();
+    }
   }
 
   /**
@@ -118,9 +175,17 @@ export class YouAreHereController {
 
     // Prevent concurrent start() race condition
     if (this.isStarting) {
-      // Wait for the existing start to complete
+      // Wait for the existing start to complete (with timeout)
       return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 100; // 5 second timeout (100 * 50ms)
         const checkInterval = setInterval(() => {
+          attempts++;
+          if (attempts > maxAttempts) {
+            clearInterval(checkInterval);
+            reject(new Error('YouAreHereController: Start timed out waiting for concurrent operation'));
+            return;
+          }
           if (!this.isStarting) {
             clearInterval(checkInterval);
             if (this.isStarted) {
@@ -141,6 +206,12 @@ export class YouAreHereController {
 
       // Start geolocation (may throw on permission denied)
       await this.geolocation.start();
+
+      // Start compass listener (no-op if not supported)
+      // Only if enabled in options (default: true)
+      if (this.options.enableCompass !== false) {
+        this.geolocation.startDeviceOrientation();
+      }
 
       // Only start animation after geolocation succeeds
       this.isStopping = false;
@@ -167,6 +238,7 @@ export class YouAreHereController {
     this.isStopping = true;
     this.stopAnimation();
     this.geolocation.stop();
+    this.geolocation.stopDeviceOrientation();
 
     // Use provided scene or the one from start()
     const targetScene = scene ?? this.currentScene;

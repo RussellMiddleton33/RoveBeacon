@@ -1,6 +1,6 @@
 {
   "name": "rovemaps-you-are-here",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A Three.js SDK for displaying user location with GPS accuracy and direction indicators",
   "type": "module",
   "main": "./dist/rovemaps-you-are-here.umd.cjs",

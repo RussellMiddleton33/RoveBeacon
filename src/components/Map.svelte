@@ -179,7 +179,10 @@
 
       // Start SDK (handle errors gracefully - user may deny permission)
       controller.start(scene).catch((err) => {
-        console.warn("SDK start failed (this is expected if permission denied):", err.message);
+        console.warn(
+          "SDK start failed (this is expected if permission denied):",
+          err.message,
+        );
         // Error is already handled by onError callback, just log here
       });
 
@@ -235,12 +238,19 @@
     }
   }
 
-  function requestLocationPermission() {
-    // SDK handles request automatically on start(),
-    // but if we need to retry after denial/error:
-    controller.geolocation.start().catch((e) => {
-      console.log("Retry failed", e);
-    });
+  async function requestLocationPermission() {
+    try {
+      // 1. Request device permissions (Compass on iOS)
+      // Must be called from user interaction
+      await controller.requestPermissions();
+
+      // 2. Ensure SDK is started (requests Location)
+      if (!controller.isActive()) {
+        await controller.start(scene);
+      }
+    } catch (e) {
+      console.log("Permission request failed", e);
+    }
   }
 
   // --- UI Controls Wrappers ---
