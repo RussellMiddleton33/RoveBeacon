@@ -177,8 +177,11 @@
         },
       });
 
-      // Start SDK
-      controller.start(scene);
+      // Start SDK (handle errors gracefully - user may deny permission)
+      controller.start(scene).catch((err) => {
+        console.warn("SDK start failed (this is expected if permission denied):", err.message);
+        // Error is already handled by onError callback, just log here
+      });
 
       // Start Render Loop
       animate();
@@ -204,6 +207,13 @@
       updateCount: locationInfo.updateCount + 1,
       lastUpdateTime: loc.timestamp,
     };
+
+    // Dispatch event to parent (App.svelte -> InfoBar)
+    dispatch("locationUpdate", {
+      longitude: loc.longitude,
+      latitude: loc.latitude,
+      timestamp: loc.timestamp,
+    });
 
     // Camera follow logic
     if (isFollowingUser) {
