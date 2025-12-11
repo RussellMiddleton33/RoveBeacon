@@ -158,13 +158,8 @@
         };
       });
 
-      // 4. Lights & Helpers
+      // 4. Lights
       scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-      scene.add(
-        new THREE.GridHelper(20000, 200, 0x333355, 0x222244).rotateX(
-          Math.PI / 2,
-        ),
-      );
 
       tileGroup = new THREE.Group();
       scene.add(tileGroup);
