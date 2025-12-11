@@ -58,11 +58,11 @@ const TARGET_DT_SEC = 0.016;
 const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   color: 0x4285F4,
   borderColor: 0xffffff,
-  dotSize: 8,
-  borderWidth: 2,
+  dotSize: 5,
+  borderWidth: 1.5,
   showAccuracyRing: true,
   showDirectionCone: true,
-  minSpeedForDirection: 0.5,
+  minSpeedForDirection: 0.4,
   coneLength: 45,
   coneWidth: 70,
   coneOpacity: 0.2,
@@ -85,9 +85,9 @@ const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   scaleCurveExponent: 0.5,
   fixedScreenSize: true,
   overallScale: 1.0,
-  ringScale: 0.2,
-  ringInnerRadius: 15,
-  ringOuterRadius: 35,
+  ringScale: 0.75,
+  ringInnerRadius: 12,
+  ringOuterRadius: 25,
   mapLibreModule: null,
 };
 
@@ -98,16 +98,17 @@ const CACHE = {
   materials: new Map<string, THREE.MeshBasicMaterial>(),
   coneGeometries: new Map<string, THREE.Group>(),
 
-  getMaterial(color: number, opacity: number = 1): THREE.MeshBasicMaterial {
-    const key = `${color}-${opacity}`;
+  getMaterial(color: number, opacity: number = 1, forGlow: boolean = false): THREE.MeshBasicMaterial {
+    const key = `${color}-${opacity}-${forGlow}`;
     let material = this.materials.get(key);
     if (!material) {
       material = new THREE.MeshBasicMaterial({
         color,
-        transparent: opacity < 1,
+        transparent: true,
         opacity,
-        side: THREE.DoubleSide, // Render from both sides
-        depthWrite: false, // Prevent z-fighting with map
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        depthTest: !forGlow, // Disable depth test for glow to ensure it renders on iOS
       });
       this.materials.set(key, material);
     }
@@ -227,17 +228,18 @@ export class ThreeUserMarker extends THREE.Group {
     this.dotMaterials = {
       high: CACHE.getMaterial(this.options.color, 1.0),
       low: CACHE.getMaterial(this.options.color, 0.7),
-      lost: CACHE.getMaterial(0x888888, 0.5),
+      lost: CACHE.getMaterial(0x2d2d2d, 0.8),
       warning: CACHE.getMaterial(0xff9500, 1.0),
       danger: CACHE.getMaterial(0xff3b30, 1.0),
     };
 
+    // Use forGlow=true for additive blending and no depth test (iOS compatibility)
     this.glowMaterials = {
-      high: CACHE.getMaterial(this.options.accuracyRingColor, 0.2),
-      low: CACHE.getMaterial(this.options.accuracyRingColor, 0.15),
-      lost: CACHE.getMaterial(0x888888, 0.1),
-      warning: CACHE.getMaterial(0xff9500, 0.3),
-      danger: CACHE.getMaterial(0xff3b30, 0.3),
+      high: CACHE.getMaterial(this.options.accuracyRingColor, 0.5, true),
+      low: CACHE.getMaterial(this.options.accuracyRingColor, 0.4, true),
+      lost: CACHE.getMaterial(0x888888, 0.3, true),
+      warning: CACHE.getMaterial(0xff9500, 0.6, true),
+      danger: CACHE.getMaterial(0xff3b30, 0.6, true),
     };
   }
 
@@ -262,8 +264,8 @@ export class ThreeUserMarker extends THREE.Group {
     this.lostCircleGeometry = new THREE.CircleGeometry(ringOuterRadius, 64);
 
     this.glowMesh = new THREE.Mesh(this.ringGeometry, this.glowMaterials.high);
-    this.glowMesh.position.z = 0.1;
-    this.glowMesh.renderOrder = 100;
+    this.glowMesh.position.z = -0.1; // Below border/dot
+    this.glowMesh.renderOrder = 0; // Render first (behind everything)
     this.glowMesh.visible = this.options.showAccuracyRing;
 
     // White Border - middle layer
@@ -608,17 +610,19 @@ export class ThreeUserMarker extends THREE.Group {
       const glowMaterial = this.glowMesh.material as THREE.MeshBasicMaterial;
 
       if (this.confidenceState === 'lost') {
-        // LOST STATE: No pulsing, slowly grow the ring over 60 seconds
+        // LOST STATE: Slowly grow the ring over 30 seconds (faster than before)
         const timeSinceLost = Date.now() - this.lostStateStartTime;
-        const growProgress = Math.min(1, timeSinceLost / this.lostGrowDuration);
+        const growDuration = 30000; // 30 seconds instead of 60
+        const growProgress = Math.min(1, timeSinceLost / growDuration);
 
-        // Start from current accuracy scale, grow to 3x over 60 seconds
+        // Start from 0.75x minimum scale, grow to 6x
         const clampedAccuracy = Math.max(5, Math.min(100, this.currentAccuracy));
-        const baseScale = clampedAccuracy / 20;
-        const maxGrowMultiplier = 3; // Grow up to 3x the base size
+        const accuracyScale = clampedAccuracy / 20;
+        const baseScale = Math.max(0.75, accuracyScale * this.options.overallScale * this.options.ringScale);
+        const maxGrowMultiplier = 6; // Grow up to 6x the base size
         const growScale = 1 + (maxGrowMultiplier - 1) * growProgress;
 
-        const finalScale = baseScale * growScale * this.options.overallScale * this.options.ringScale;
+        const finalScale = baseScale * growScale;
         this.glowMesh.scale.set(finalScale, finalScale, 1);
 
         // Static low opacity, no animation
@@ -637,13 +641,14 @@ export class ThreeUserMarker extends THREE.Group {
 
         const clampedAccuracy = Math.max(5, Math.min(100, this.currentAccuracy));
         const accuracyScale = clampedAccuracy / 20;
-        const pulseAmount = 1 + Math.sin(this.pulsePhase) * 0.15;
 
         // Low confidence: 2x ring size to indicate uncertainty
         const lowConfidenceMultiplier = this.confidenceState === 'low' ? 2.0 : 1.0;
 
-        // Apply both overallScale and independent ringScale
-        const finalScale = accuracyScale * pulseAmount * this.options.overallScale * this.options.ringScale * lowConfidenceMultiplier;
+        // Calculate base scale with minimum of 0.75, THEN apply pulse animation
+        const baseScale = Math.max(0.75, accuracyScale * this.options.overallScale * this.options.ringScale * lowConfidenceMultiplier);
+        const pulseAmount = 1 + Math.sin(this.pulsePhase) * 0.15;
+        const finalScale = baseScale * pulseAmount;
 
         this.glowMesh.scale.set(finalScale, finalScale, 1);
 
@@ -654,8 +659,9 @@ export class ThreeUserMarker extends THREE.Group {
         const clampedAccuracy = Math.max(5, Math.min(100, this.currentAccuracy));
         // Low confidence: 2x ring size to indicate uncertainty
         const lowConfidenceMultiplier = this.confidenceState === 'low' ? 2.0 : 1.0;
-        // Apply both overallScale and independent ringScale
-        const accuracyScale = clampedAccuracy / 20 * this.options.overallScale * this.options.ringScale * lowConfidenceMultiplier;
+        // Apply both overallScale and independent ringScale, with minimum scale of 0.75
+        const rawScale = clampedAccuracy / 20 * this.options.overallScale * this.options.ringScale * lowConfidenceMultiplier;
+        const accuracyScale = Math.max(0.75, rawScale);
         this.glowMesh.scale.set(accuracyScale, accuracyScale, 1);
       }
     }
@@ -798,10 +804,9 @@ export class ThreeUserMarker extends THREE.Group {
    */
   setColor(color: number): this {
     if (!isValidNumber(color)) return this;
-    this.options.color = color;
-    // Update high and low confidence dot materials (lost stays grey)
-    this.dotMaterials.high.color.setHex(color);
-    this.dotMaterials.low.color.setHex(color);
+    // Update both dot and ring colors
+    this.setDotColor(color);
+    this.setRingColor(color);
     return this;
   }
 
@@ -812,9 +817,28 @@ export class ThreeUserMarker extends THREE.Group {
   setDotColor(color: number): this {
     if (!isValidNumber(color)) return this;
     this.options.color = color;
-    // Update high and low confidence dot materials (lost stays grey)
-    this.dotMaterials.high.color.setHex(color);
-    this.dotMaterials.low.color.setHex(color);
+    // Create new materials with the new color (don't use cache for custom colors)
+    this.dotMaterials.high = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 1.0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.dotMaterials.low = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    // Apply to current mesh
+    if (this.confidenceState === 'high') {
+      this.dotMesh.material = this.dotMaterials.high;
+    } else if (this.confidenceState === 'low') {
+      this.dotMesh.material = this.dotMaterials.low;
+    }
+    // For other states (lost, warning, danger), keep their specific colors
     return this;
   }
 
@@ -824,7 +848,9 @@ export class ThreeUserMarker extends THREE.Group {
    */
   setBorderColor(color: number): this {
     if (!isValidNumber(color)) return this;
-    (this.borderMesh.material as THREE.MeshBasicMaterial).color.setHex(color);
+    const mat = this.borderMesh.material as THREE.MeshBasicMaterial;
+    mat.color.setHex(color);
+    mat.needsUpdate = true;
     return this;
   }
 
@@ -835,9 +861,29 @@ export class ThreeUserMarker extends THREE.Group {
   setRingColor(color: number): this {
     if (!isValidNumber(color)) return this;
     this.options.accuracyRingColor = color;
-    // Update high and low confidence glow materials (lost stays grey)
-    this.glowMaterials.high.color.setHex(color);
-    this.glowMaterials.low.color.setHex(color);
+    // Create new materials with the new color (don't use cache for custom colors)
+    this.glowMaterials.high = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.5,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      depthTest: false,
+    });
+    this.glowMaterials.low = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      depthTest: false,
+    });
+    // Apply to current mesh
+    if (this.confidenceState === 'high') {
+      this.glowMesh.material = this.glowMaterials.high;
+    } else if (this.confidenceState === 'low') {
+      this.glowMesh.material = this.glowMaterials.low;
+    }
     return this;
   }
 

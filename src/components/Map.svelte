@@ -44,11 +44,13 @@
   let markerHeight = 0;
 
   // Marker scale, ring scale, pulse speed, dot size, and dot stroke
-  let markerScale = 1;
+  let markerScale = 0.75;
   let ringScale = 0.2;
   let pulseSpeed = 0.2;
   let dotSize = 8;
   let dotStrokeWidth = 2;
+  let ringInnerRadius = 12;
+  let ringOuterRadius = 25;
 
   // Auto-confidence tracking
   let autoConfidenceEnabled = true;
@@ -193,6 +195,9 @@
           locationError = err.message;
         },
       });
+
+      // Apply initial marker scale
+      controller.marker.setOverallScale(markerScale);
 
       // Start SDK (handle errors gracefully - user may deny permission)
       controller.start(scene).catch((err) => {
@@ -342,6 +347,11 @@
   function updateDotStrokeWidth(width: number) {
     if (!controller) return;
     controller.marker.setDotStrokeWidth(width);
+  }
+
+  function updateRingRadii(inner: number, outer: number) {
+    if (!controller) return;
+    controller.marker.setRingSize(inner, outer);
   }
 
   function toggleAutoConfidence(enabled: boolean) {
@@ -982,6 +992,30 @@
           step="1"
           bind:value={dotStrokeWidth}
           on:input={() => updateDotStrokeWidth(dotStrokeWidth)}
+        />
+      </div>
+      <div class="sdk-slider-row">
+        <label for="ring-inner">Ring Inner: {ringInnerRadius}</label>
+        <input
+          id="ring-inner"
+          type="range"
+          min="2"
+          max="30"
+          step="1"
+          bind:value={ringInnerRadius}
+          on:input={() => updateRingRadii(ringInnerRadius, ringOuterRadius)}
+        />
+      </div>
+      <div class="sdk-slider-row">
+        <label for="ring-outer">Ring Outer: {ringOuterRadius}</label>
+        <input
+          id="ring-outer"
+          type="range"
+          min="10"
+          max="60"
+          step="1"
+          bind:value={ringOuterRadius}
+          on:input={() => updateRingRadii(ringInnerRadius, ringOuterRadius)}
         />
       </div>
     </div>
