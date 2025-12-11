@@ -629,9 +629,6 @@
           Confidence: <span class="state-value">{confidenceState}</span>
         </div>
         <div>Hidden: <span class="state-value">{isMarkerHidden}</span></div>
-        <div>
-          Opacity: <span class="state-value">{currentOpacity.toFixed(2)}</span>
-        </div>
       </div>
     </div>
   </div>

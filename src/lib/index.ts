@@ -16,5 +16,6 @@ export type {
   GeolocationEvents,
   CoordinateConverter,
   YouAreHereControllerOptions,
+  ConfidenceState,
 } from './types';
 

@@ -42,7 +42,7 @@ Speed & Heading Visuals
 ## 📦 Installation
 
 ```bash
-npm install rovemaps-you-are-here three
+npm install rovemaps-you-are-here
 ```
 
 ## 🚀 Quick Start
