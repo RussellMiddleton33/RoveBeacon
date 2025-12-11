@@ -385,6 +385,23 @@ export class ThreeUserMarker extends THREE.Group {
   }
 
   /**
+   * Dispose cone group resources to prevent memory leaks
+   * Call this before recreating the cone (e.g., color change, confidence state change)
+   */
+  private disposeConeGroup(): void {
+    if (!this.coneGroup) return;
+
+    this.coneGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        }
+      }
+    });
+  }
+
+  /**
    * Get the projection instance used for coordinate conversion
    */
   getProjection(): MercatorProjection | null {
@@ -817,6 +834,14 @@ export class ThreeUserMarker extends THREE.Group {
   setDotColor(color: number): this {
     if (!isValidNumber(color)) return this;
     this.options.color = color;
+
+    // Dispose old custom materials to prevent memory leak
+    if (!this.usingCachedMaterials) {
+      this.dotMaterials.high?.dispose();
+      this.dotMaterials.low?.dispose();
+    }
+    this.usingCachedMaterials = false;
+
     // Create new materials with the new color (don't use cache for custom colors)
     this.dotMaterials.high = new THREE.MeshBasicMaterial({
       color,
@@ -861,6 +886,14 @@ export class ThreeUserMarker extends THREE.Group {
   setRingColor(color: number): this {
     if (!isValidNumber(color)) return this;
     this.options.accuracyRingColor = color;
+
+    // Dispose old custom materials to prevent memory leak
+    if (!this.usingCachedMaterials) {
+      this.glowMaterials.high?.dispose();
+      this.glowMaterials.low?.dispose();
+    }
+    this.usingCachedMaterials = false;
+
     // Create new materials with the new color (don't use cache for custom colors)
     this.glowMaterials.high = new THREE.MeshBasicMaterial({
       color,
@@ -895,6 +928,9 @@ export class ThreeUserMarker extends THREE.Group {
   setConeColor(color: number): this {
     if (!isValidNumber(color)) return this;
     this.options.coneColor = color;
+
+    // Dispose old cone resources to prevent memory leak
+    this.disposeConeGroup();
 
     // Recreate the cone with new color
     this.remove(this.coneGroup);
@@ -976,7 +1012,8 @@ export class ThreeUserMarker extends THREE.Group {
       // Restore original settings
       this.options.pulseSpeed = this.savedPulseSpeed;
       this.options.coneColor = this.savedConeColor;
-      // Recreate cone with original color
+      // Dispose old cone and recreate with original color
+      this.disposeConeGroup();
       this.remove(this.coneGroup);
       this.coneGroup = this.createDirectionCone();
       this.add(this.coneGroup);
@@ -993,6 +1030,8 @@ export class ThreeUserMarker extends THREE.Group {
       // Warning: orange cone, faster pulse (0.35)
       this.options.pulseSpeed = 0.35;
       this.options.coneColor = 0xff9500;
+      // Dispose old cone and recreate with warning color
+      this.disposeConeGroup();
       this.remove(this.coneGroup);
       this.coneGroup = this.createDirectionCone();
       this.add(this.coneGroup);
@@ -1001,6 +1040,8 @@ export class ThreeUserMarker extends THREE.Group {
       // Danger: red cone, even faster pulse (0.55)
       this.options.pulseSpeed = 0.55;
       this.options.coneColor = 0xff3b30;
+      // Dispose old cone and recreate with danger color
+      this.disposeConeGroup();
       this.remove(this.coneGroup);
       this.coneGroup = this.createDirectionCone();
       this.add(this.coneGroup);

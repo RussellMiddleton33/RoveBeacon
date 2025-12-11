@@ -701,14 +701,6 @@
           </button>
         {/if}
       </div>
-    {:else if locationPermission === "denied" || locationPermission === "unavailable"}
-      <div class="permission-error">
-        <div class="error-icon">⚠️</div>
-        <div class="error-text">{locationError}</div>
-        <button class="retry-btn" on:click={requestLocationPermission}>
-          Try Again
-        </button>
-      </div>
     {:else}
       <div class="speed-display">
         <span class="speed-value">{formatSpeed(locationInfo.speed)}</span>
@@ -1175,32 +1167,7 @@
     transform: translateY(0);
   }
 
-  .location-required-card .retry-btn {
-    background: transparent;
-    color: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 16px 32px;
-    border-radius: 12px;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-
-  .location-required-card .retry-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.3);
-    color: white;
-  }
-
-  .location-required-card .hint {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.4);
-    margin: 24px 0 0 0;
-  }
-
   .map-container {
-    width: 100%;
     width: 100%;
     height: 100dvh;
     background: #1a1a2e;
