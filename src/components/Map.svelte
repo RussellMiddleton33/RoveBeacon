@@ -43,10 +43,11 @@
   // Marker height in meters
   let markerHeight = 0;
 
-  // Marker scale, ring scale, pulse speed, and dot stroke
+  // Marker scale, ring scale, pulse speed, dot size, and dot stroke
   let markerScale = 1;
-  let ringScale = 0.7;
+  let ringScale = 0.5;
   let pulseSpeed = 0.2;
+  let dotSize = 9;
   let dotStrokeWidth = 3;
 
   // Auto-confidence tracking
@@ -329,6 +330,11 @@
   function updateRingScale(scale: number) {
     if (!controller) return;
     controller.marker.setRingScale(scale);
+  }
+
+  function updateDotSize(size: number) {
+    if (!controller) return;
+    controller.marker.setDotSize(size);
   }
 
   function updateDotStrokeWidth(width: number) {
@@ -853,6 +859,18 @@
           step="0.05"
           bind:value={pulseSpeed}
           on:input={() => updatePulseSpeed(pulseSpeed)}
+        />
+      </div>
+      <div class="sdk-slider-row">
+        <label for="dot-size">Dot Size: {dotSize.toFixed(0)}px</label>
+        <input
+          id="dot-size"
+          type="range"
+          min="3"
+          max="30"
+          step="1"
+          bind:value={dotSize}
+          on:input={() => updateDotSize(dotSize)}
         />
       </div>
       <div class="sdk-slider-row">

@@ -81,11 +81,11 @@ const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   accuracyLostThresholdMeters: ACCURACY_LOST_THRESHOLD_METERS,
   minScale: 0.5,
   maxScale: 10,
-  scaleReferenceDistance: 1000,
+  scaleReferenceDistance: 200,
   scaleCurveExponent: 0.5,
   fixedScreenSize: true,
   overallScale: 1.0,
-  ringScale: 0.7,
+  ringScale: 0.5,
   mapLibreModule: null,
 };
 
@@ -104,6 +104,7 @@ const CACHE = {
         color,
         transparent: opacity < 1,
         opacity,
+        side: THREE.DoubleSide, // Render from both sides
         depthWrite: false, // Prevent z-fighting with map
       });
       this.materials.set(key, material);
@@ -176,6 +177,10 @@ export class ThreeUserMarker extends THREE.Group {
   private lastPositionUpdateTime = 0; // Timestamp of last position update for staleness detection
   private lostStateStartTime = 0; // When "lost" state began (for grow animation)
   private lostGrowDuration = 60000; // 60 seconds to reach max size
+
+  // Geometry references for swapping between ring (normal) and circle (lost)
+  private ringGeometry!: THREE.RingGeometry;
+  private lostCircleGeometry!: THREE.CircleGeometry;
   private savedPulseSpeed = 0; // Store original pulse speed when entering warning/danger
   private savedConeColor = 0; // Store original cone color when entering warning/danger
 
@@ -244,22 +249,40 @@ export class ThreeUserMarker extends THREE.Group {
 
     const { dotSize, borderWidth, borderColor } = this.options;
 
-    // Center Dot
-    const dotGeometry = new THREE.CircleGeometry(dotSize, 32);
-    this.dotMesh = new THREE.Mesh(dotGeometry, this.dotMaterials.high);
-    // Lift slightly to avoid z-fighting
-    this.dotMesh.position.z = 0.1;
+    // Accuracy Ring (pulsing glow) - donut shape so dot/border show through center
+    // Uses fixed inner radius independent of dot size, scaled by accuracy/ringScale
+    this.ringGeometry = new THREE.RingGeometry(
+      15,  // Fixed inner radius
+      35,  // Fixed outer radius (scaled by accuracy)
+      64   // Segments
+    );
+    // Solid circle for "lost" state - grows to show uncertainty area
+    this.lostCircleGeometry = new THREE.CircleGeometry(35, 64);
 
-    // White Border
-    const borderGeometry = new THREE.CircleGeometry(dotSize + borderWidth, 32);
-    // Fixed: cached material for border too
-    const borderMaterial = CACHE.getMaterial(borderColor, 1.0);
-    this.borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
-
-    // Accuracy Ring (pulsing glow)
-    const ringGeometry = new THREE.CircleGeometry(1, 64); // Unit radius, scale later
-    this.glowMesh = new THREE.Mesh(ringGeometry, this.glowMaterials.high);
+    this.glowMesh = new THREE.Mesh(this.ringGeometry, this.glowMaterials.high);
+    this.glowMesh.position.z = 0.1;
+    this.glowMesh.renderOrder = 0;
     this.glowMesh.visible = this.options.showAccuracyRing;
+
+    // White Border - middle layer
+    const borderGeometry = new THREE.CircleGeometry(dotSize + borderWidth, 32);
+    const borderMaterial = new THREE.MeshBasicMaterial({
+      color: borderColor,
+      side: THREE.DoubleSide,
+    });
+    this.borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
+    this.borderMesh.position.z = 0.11;
+    this.borderMesh.renderOrder = 1;
+
+    // Blue Dot (main marker) - top layer
+    const dotGeometry = new THREE.CircleGeometry(dotSize, 32);
+    const dotMaterial = new THREE.MeshBasicMaterial({
+      color: this.options.color,
+      side: THREE.DoubleSide,
+    });
+    this.dotMesh = new THREE.Mesh(dotGeometry, dotMaterial);
+    this.dotMesh.position.z = 0.12;
+    this.dotMesh.renderOrder = 2;
 
     // Direction Cone
     this.coneGroup = this.createDirectionCone();
@@ -657,10 +680,11 @@ export class ThreeUserMarker extends THREE.Group {
 
         if (this.options.fixedScreenSize) {
           // Fixed screen size mode (like MapLibre):
-          // Scale linearly with distance to maintain constant apparent size
-          // Reference distance defines where scale = 1
-          const { scaleReferenceDistance, overallScale } = this.options;
-          this.lastScale = (dist / scaleReferenceDistance) * overallScale;
+          // Use square root scaling for more natural zoom behavior
+          // This prevents marker from growing too large when zoomed out
+          const { scaleReferenceDistance, overallScale, minScale, maxScale } = this.options;
+          const rawScale = Math.sqrt(dist / scaleReferenceDistance) * overallScale;
+          this.lastScale = Math.max(minScale, Math.min(maxScale, rawScale));
         } else {
           // Zoom-adaptive scaling algorithm:
           // 1. Normalize distance relative to reference distance
@@ -891,6 +915,13 @@ export class ThreeUserMarker extends THREE.Group {
     // Track when we enter "lost" state for the grow animation
     if (state === 'lost' && previousState !== 'lost') {
       this.lostStateStartTime = Date.now();
+      // Swap to solid circle geometry for lost state
+      this.glowMesh.geometry = this.lostCircleGeometry;
+    }
+
+    // Swap back to ring geometry when leaving lost state
+    if (state !== 'lost' && previousState === 'lost') {
+      this.glowMesh.geometry = this.ringGeometry;
     }
 
     // Save original settings when entering warning/danger, restore when leaving
@@ -1014,6 +1045,39 @@ export class ThreeUserMarker extends THREE.Group {
    */
   getRingScale(): number {
     return this.options.ringScale;
+  }
+
+  /**
+   * Set the dot size (radius)
+   * Note: This recreates the dot and border geometry for the new size
+   * @param size Radius in scene units
+   * @returns this for method chaining
+   */
+  setDotSize(size: number): this {
+    if (!isValidNumber(size) || size <= 0) {
+      sdkWarn(`ThreeUserMarker.setDotSize: Invalid size value: ${size}`);
+      return this;
+    }
+    this.options.dotSize = size;
+
+    // Recreate dot geometry with new size
+    const newDotGeometry = new THREE.CircleGeometry(size, 32);
+    this.dotMesh.geometry.dispose();
+    this.dotMesh.geometry = newDotGeometry;
+
+    // Recreate border geometry to match new dot size
+    const newBorderGeometry = new THREE.CircleGeometry(size + this.options.borderWidth, 32);
+    this.borderMesh.geometry.dispose();
+    this.borderMesh.geometry = newBorderGeometry;
+
+    return this;
+  }
+
+  /**
+   * Get the current dot size (radius)
+   */
+  getDotSize(): number {
+    return this.options.dotSize;
   }
 
   /**
