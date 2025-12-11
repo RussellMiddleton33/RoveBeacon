@@ -1,14 +1,10 @@
 import * as THREE from 'three';
-import { UserMarker } from './UserMarker';
-import { GeolocationProvider } from './GeolocationProvider';
-import type { YouAreHereControllerOptions } from './types';
+import { ThreeUserMarker } from './ThreeUserMarker';
+import { GeolocationProvider } from '../GeolocationProvider';
+import { isValidNumber } from '../../utils/validation';
+import type { YouAreHereControllerOptions } from '../types';
 
-/**
- * Validates that a value is a finite number
- */
-function isValidNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
+import type { LocationSource } from '../sources';
 
 /**
  * All-in-one controller that manages geolocation + marker together.
@@ -19,10 +15,11 @@ function isValidNumber(value: unknown): value is number {
  * - Frame-rate independent animation loop
  * - Proper cleanup and resource management
  * - Thread-safe start/stop operations
+ * - Concurrent start() protection with timeout
  *
  * @example
  * ```typescript
- * const controller = new YouAreHereController({
+ * const controller = new ThreeYouAreHereController({
  *   center: [-74.006, 40.7128], // NYC [lng, lat]
  *   markerOptions: { color: 0x4285F4 },
  *   onUpdate: (location) => console.log(location),
@@ -34,12 +31,12 @@ function isValidNumber(value: unknown): value is number {
  * controller.dispose();
  * ```
  */
-export class YouAreHereController {
-  /** The UserMarker instance - access for customization */
-  public readonly marker: UserMarker;
+export class ThreeYouAreHereController {
+  /** The ThreeUserMarker instance - access for customization */
+  public readonly marker: ThreeUserMarker;
 
-  /** The GeolocationProvider instance - access for advanced control */
-  public readonly geolocation: GeolocationProvider;
+  /** The LocationSource instance - access for advanced control */
+  public readonly geolocation: LocationSource;
 
   private options: YouAreHereControllerOptions;
 
@@ -55,28 +52,28 @@ export class YouAreHereController {
 
     // Validate required center parameter
     if (!options.center) {
-      throw new Error('YouAreHereController: center option is required');
+      throw new Error('ThreeYouAreHereController: center option is required');
     }
 
     if (!Array.isArray(options.center) || options.center.length !== 2) {
-      throw new Error('YouAreHereController: center must be [longitude, latitude] array');
+      throw new Error('ThreeYouAreHereController: center must be [longitude, latitude] array');
     }
 
     const [lng, lat] = options.center;
     if (!isValidNumber(lng) || !isValidNumber(lat)) {
-      throw new Error(`YouAreHereController: invalid center coordinates (${lng}, ${lat})`);
+      throw new Error(`ThreeYouAreHereController: invalid center coordinates (${lng}, ${lat})`);
     }
 
     if (options.scale !== undefined && (!isValidNumber(options.scale) || options.scale <= 0)) {
-      throw new Error(`YouAreHereController: scale must be a positive number, got: ${options.scale}`);
+      throw new Error(`ThreeYouAreHereController: scale must be a positive number, got: ${options.scale}`);
     }
 
     // Create marker with projection pre-configured
-    this.marker = new UserMarker(options.markerOptions);
+    this.marker = new ThreeUserMarker(options.markerOptions);
     this.marker.setProjectionCenter(options.center, options.scale ?? 1);
 
-    // Create geolocation provider
-    this.geolocation = new GeolocationProvider(options.geolocationOptions);
+    // Use injected source or create default GeolocationProvider
+    this.geolocation = options.locationSource ?? new GeolocationProvider(options.geolocationOptions);
 
     // Wire up location updates to marker
     this.geolocation.on('update', (location) => {
@@ -116,31 +113,27 @@ export class YouAreHereController {
     });
 
     // Wire up device orientation (compass)
+    // Note: The marker's setDeviceHeading() handles smoothing internally,
+    // so we pass the raw heading values directly without pre-smoothing
     this.geolocation.on('deviceOrientation', (event) => {
       if (this.isDisposed) return;
 
-      // Calculate compass heading: 
-      // alpha is 0-360 degrees around z-axis (compass heading)
-      // Note: This is a simplified implementation. Real-world compass 
-      // handling needs to account for screen orientation and declination.
-      // But for basic "phone pointing this way", alpha is usually sufficient 
-      // on modern browsers which often compensate for screen rotation automatically.
-      // Or we should check `event.webkitCompassHeading` for iOS.
-
+      // Calculate compass heading from device orientation event
+      // webkitCompassHeading is available on iOS and provides true north heading
+      // alpha provides rotation around z-axis on Android/standard browsers
       let heading: number | null = null;
 
-      if ((event as any).webkitCompassHeading) {
-        // iOS
+      if ((event as any).webkitCompassHeading !== undefined) {
+        // iOS - webkitCompassHeading is already compass heading (0=N, 90=E)
         heading = (event as any).webkitCompassHeading;
       } else if (event.alpha !== null) {
         // Android / Standard
-        // alpha increases counter-clockwise on some devices? Standard says 0=North, increasing counter-clockwise?
-        // Actually MDN says: 0 is North, increasing when rotating device counter-clockwise (so East is 270?).
-        // Compass heading usually means 0=N, 90=E.
-        // If alpha is counter-clockwise: Heading = 360 - alpha.
-        heading = 360 - event.alpha;
+        // alpha is degrees [0, 360) where 0 = North, increasing counter-clockwise
+        // Convert to compass heading where 0=N, increasing clockwise (90=E)
+        heading = (360 - event.alpha) % 360;
       }
 
+      // Pass raw heading - marker handles smoothing
       this.marker.setDeviceHeading(heading);
     });
   }
@@ -154,7 +147,9 @@ export class YouAreHereController {
    */
   async requestPermissions(): Promise<void> {
     if (this.options.enableCompass !== false) {
-      await GeolocationProvider.requestDeviceOrientationPermission();
+      if (this.geolocation instanceof GeolocationProvider) {
+        await this.geolocation.requestDeviceOrientationPermission();
+      }
     }
   }
 
@@ -165,7 +160,7 @@ export class YouAreHereController {
    */
   async start(scene: THREE.Scene): Promise<void> {
     if (this.isDisposed) {
-      throw new Error('YouAreHereController: Cannot start disposed controller');
+      throw new Error('ThreeYouAreHereController: Cannot start disposed controller');
     }
 
     // Already started - no-op
@@ -183,7 +178,7 @@ export class YouAreHereController {
           attempts++;
           if (attempts > maxAttempts) {
             clearInterval(checkInterval);
-            reject(new Error('YouAreHereController: Start timed out waiting for concurrent operation'));
+            reject(new Error('ThreeYouAreHereController: Start timed out waiting for concurrent operation'));
             return;
           }
           if (!this.isStarting) {
@@ -191,7 +186,7 @@ export class YouAreHereController {
             if (this.isStarted) {
               resolve();
             } else {
-              reject(new Error('YouAreHereController: Start failed'));
+              reject(new Error('ThreeYouAreHereController: Start failed'));
             }
           }
         }, 50);
@@ -208,8 +203,8 @@ export class YouAreHereController {
       await this.geolocation.start();
 
       // Start compass listener (no-op if not supported)
-      // Only if enabled in options (default: true)
-      if (this.options.enableCompass !== false) {
+      // Only if enabled in options (default: true) and provider supports it
+      if (this.options.enableCompass !== false && this.geolocation instanceof GeolocationProvider) {
         this.geolocation.startDeviceOrientation();
       }
 
@@ -238,7 +233,10 @@ export class YouAreHereController {
     this.isStopping = true;
     this.stopAnimation();
     this.geolocation.stop();
-    this.geolocation.stopDeviceOrientation();
+    
+    if (this.geolocation instanceof GeolocationProvider) {
+      this.geolocation.stopDeviceOrientation();
+    }
 
     // Use provided scene or the one from start()
     const targetScene = scene ?? this.currentScene;

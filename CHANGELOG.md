@@ -2,6 +2,52 @@
 
 All notable changes to the "rovemaps-you-are-here" project will be documented in this file.
 
+## [2.2.0] - 2025-12-10
+
+### New Features - MapLibre GL JS Support
+
+The SDK now supports **both Three.js and MapLibre GL JS**! You can use the same familiar API pattern with either rendering engine.
+
+#### MapLibre Components
+- **MapLibreUserMarker**: Canvas-based blue dot marker for MapLibre maps
+  - All the same features as the Three.js version
+  - Smooth position and heading animations
+  - Pulsing accuracy ring
+  - Direction cone when moving
+  - Automatic confidence degradation
+  - Canvas rendering for high performance
+
+- **MapLibreYouAreHereController**: All-in-one controller for MapLibre
+  - Automatic geolocation tracking
+  - Fly-to-user on first location fix
+  - Device compass integration
+  - Same API as the Three.js controller
+
+#### Usage
+```typescript
+// MapLibre GL JS
+import { MapLibreYouAreHereController } from 'rovemaps-you-are-here';
+
+const controller = new MapLibreYouAreHereController({
+  markerOptions: { color: 0x4285F4 },
+  flyToOnFirstFix: true,
+});
+
+await controller.start(map); // Pass your MapLibre map instance
+```
+
+#### Peer Dependencies
+- Both `three` and `maplibre-gl` are now **optional** peer dependencies
+- Install only what you need for your project
+
+### Demo
+- Added tab switcher to demo app to toggle between Three.js and MapLibre demos
+- Both demos have the same SDK controls panel for testing
+
+### CDN
+- **unpkg**: `https://unpkg.com/rovemaps-you-are-here@2.2.0/dist/rovemaps-you-are-here.umd.cjs`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/rovemaps-you-are-here@2.2.0/dist/rovemaps-you-are-here.umd.cjs`
+
 ## [2.1.0] - 2025-12-10
 
 ### Bug Fixes
@@ -54,10 +100,10 @@ accuracyLostThresholdMeters?: number;    // default: 500
 ### Breaking Changes
 - **Input Validation**: Invalid coordinates now throw errors or return safe defaults instead of silently failing
 - **MercatorProjection**: Constructor now validates all inputs and throws on invalid center/scale
-- **YouAreHereController**: Constructor now validates center option and throws if invalid
+- **ThreeYouAreHereController**: Constructor now validates center option and throws if invalid
 
 ### Critical Bug Fixes
-- **Memory Leak - Animation Loop**: Fixed animation loop continuing after `stop()` in YouAreHereController
+- **Memory Leak - Animation Loop**: Fixed animation loop continuing after `stop()` in ThreeYouAreHereController
 - **Race Condition - Concurrent start()**: Fixed race condition when calling `start()` multiple times concurrently
 - **Heading Math**: Fixed heading normalization for GPS values > 360 or < 0 degrees
 - **Altitude Scaling**: Fixed incorrect Mercator distortion applied to altitude values
@@ -67,7 +113,7 @@ accuracyLostThresholdMeters?: number;    // default: 500
 ### Performance Improvements
 - **Frame-Rate Independent Animations**: All animations now use deltaTime for consistent behavior across devices
 - **Update Throttling**: GeolocationProvider now throttles updates to 100ms minimum interval
-- **Camera Distance Caching**: UserMarker caches camera distance to reduce per-frame calculations
+- **Camera Distance Caching**: ThreeUserMarker caches camera distance to reduce per-frame calculations
 - **Set-based Event Listeners**: GeolocationProvider uses Set instead of Array for O(1) listener operations
 
 ### New Features
@@ -98,12 +144,12 @@ accuracyLostThresholdMeters?: number;    // default: 500
 ## [1.1.0] - 2025-12-10
 
 ### 🚀 Major Improvements
-- **New Name**: The main controller is now called `YouAreHereController` (formerly `LocationMarkerController`). This is a breaking change for imports.
-- **Orientation Support**: Added `orientation` option to `UserMarker`. Supports `'z-up'` (default) and `'y-up'` (standard Three.js).
-- **Simpler Quick Start**: Documentation updated to prioritize `YouAreHereController` for easier setup.
+- **New Name**: The main controller is now called `ThreeYouAreHereController` (formerly `LocationMarkerController`). This is a breaking change for imports.
+- **Orientation Support**: Added `orientation` option to `ThreeUserMarker`. Supports `'z-up'` (default) and `'y-up'` (standard Three.js).
+- **Simpler Quick Start**: Documentation updated to prioritize `ThreeYouAreHereController` for easier setup.
 
 ### ⚡ Performance
-- **Object Reuse**: `UserMarker` now reuses internal Vector3 objects, reducing garbage collection during high-frequency GPS updates.
+- **Object Reuse**: `ThreeUserMarker` now reuses internal Vector3 objects, reducing garbage collection during high-frequency GPS updates.
 
 ### 🐛 Bug Fixes
 - **Memory Leak**: Fixed a critical issue where calling `start()` multiple times on `GeolocationProvider` would create overlapping watchers.

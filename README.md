@@ -1,48 +1,108 @@
-# 📍 RoveMaps "YouAreHere" Realtime Beacon SDK
+<p align="center">
+  <img src="https://img.shields.io/badge/RoveMaps-YouAreHere-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white" alt="RoveMaps YouAreHere" />
+</p>
 
-[![npm version](https://img.shields.io/npm/v/rovemaps-you-are-here.svg)](https://www.npmjs.com/package/rovemaps-you-are-here)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-A Three.js "YOU ARE HERE" Blue Dot Experience SDK for displaying user location with GPS accuracy ring and direction indicator. Perfect for mapping applications, AR experiences, and location-based games. Customize Colors, Debounce On Routing Lines. Easy To Use & Implement Into any Three.JS Application.
-
-**Features Include:**
-- Visibility Controls
-- Confidence State UI (high/low/lost signal)
-- Altitude Modifications
-- Snap To Routing
-- Debounce Effects
-- Customizable Colors
-- Speed & Heading Visuals
-- Frame-rate independent animations
-- Input validation & security checks
+<h1 align="center">RoveMaps YouAreHere SDK</h1>
 
 <p align="center">
+  <strong>A professional "blue dot" user location SDK for Three.js and MapLibre GL</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/rovemaps-you-are-here">
+    <img src="https://img.shields.io/npm/v/rovemaps-you-are-here.svg?style=flat-square" alt="npm version" />
+  </a>
+  <a href="https://bundlephobia.com/package/rovemaps-you-are-here">
+    <img src="https://img.shields.io/bundlephobia/minzip/rovemaps-you-are-here?style=flat-square" alt="bundle size" />
+  </a>
+  <a href="https://github.com/russellmiddleton33/RoveBeacon/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="license" />
+  </a>
   <a href="https://russellmiddleton33.github.io/RoveBeacon/">
-    <img src="https://img.shields.io/badge/🚀_Live_Demo-Try_it_Now!-4285F4?style=for-the-badge&logoColor=white" alt="Live Demo" />
+    <img src="https://img.shields.io/badge/demo-live-success?style=flat-square" alt="live demo" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://russellmiddleton33.github.io/RoveBeacon/">
-    <strong>👉 Try the Live Demo on your Phone! 👈</strong>
-  </a>
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#api-reference">API</a> ·
+  <a href="#examples">Examples</a> ·
+  <a href="https://russellmiddleton33.github.io/RoveBeacon/">Live Demo</a>
 </p>
-
-> **Note:** The demo requires location permissions and works best on mobile devices with GPS. **HTTPS is required.**
 
 ---
 
-## ✨ Features
+## Overview
 
-- 🔵 **Blue dot marker** - Clean, Google Maps-style user location indicator
-- 📍 **Accuracy ring** - Pulsing ring that scales with GPS accuracy
-- 🧭 **Direction cone** - Shows heading when user is moving (like Apple Maps)
-- 🎯 **Smooth animations** - Position and heading interpolation
-- 📱 **Mobile-ready** - Handles geolocation permissions gracefully
-- 🎨 **Customizable** - Colors, sizes, and behaviors are all configurable
-- 📦 **Lightweight** - Only peer dependency is Three.js
+RoveMaps YouAreHere provides a production-ready "blue dot" user location marker for mapping applications. Drop it into any Three.js scene or MapLibre GL map and get a polished, Google Maps-style location indicator with GPS accuracy visualization and smooth animations.
 
-## 📦 Installation
+```typescript
+import { ThreeYouAreHereController } from 'rovemaps-you-are-here';
+
+const controller = new ThreeYouAreHereController({
+  center: [-74.006, 40.7128], // NYC
+});
+
+await controller.start(scene);
+```
+
+**[Try the Live Demo →](https://russellmiddleton33.github.io/RoveBeacon/)**
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Blue Dot Marker** | Clean, Google Maps-style user location indicator |
+| **Accuracy Ring** | Pulsing ring that scales with GPS precision |
+| **Direction Cone** | Heading indicator when user is moving |
+| **Compass Support** | Device orientation for heading when stationary |
+| **Confidence States** | Visual feedback for GPS signal quality |
+| **Smooth Animations** | Frame-rate independent position and heading interpolation |
+| **Auto Staleness** | Automatic confidence degradation when GPS signal is lost |
+| **Battery Aware** | Pauses tracking when tab is hidden |
+| **Multi-Platform** | Three.js, MapLibre GL JS, and MapBox GL JS support |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Your Application                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────────────┐    ┌──────────────────────┐          │
+│  │  ThreeYouAreHere     │    │  MapLibreYouAreHere  │          │
+│  │  Controller          │    │  Controller          │          │
+│  └──────────┬───────────┘    └──────────┬───────────┘          │
+│             │                           │                        │
+│             └─────────┬─────────────────┘                        │
+│                       │                                          │
+│             ┌─────────▼─────────┐                               │
+│             │ GeolocationProvider│ ◄── Shared location source    │
+│             └─────────┬─────────┘                               │
+│                       │                                          │
+│  ┌────────────────────┼────────────────────┐                    │
+│  │                    │                    │                    │
+│  ▼                    ▼                    ▼                    │
+│ GPS API          Compass API        Visibility API              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Components:**
+
+- **Controllers** — High-level API that manages marker + geolocation together
+- **Markers** — Visual components (Three.js meshes or MapLibre custom layers)
+- **GeolocationProvider** — Unified location source with events and permissions
+- **MercatorProjection** — GPS → scene coordinate conversion
+
+---
+
+## Installation
 
 ### npm (Recommended)
 
@@ -50,335 +110,599 @@ A Three.js "YOU ARE HERE" Blue Dot Experience SDK for displaying user location w
 npm install rovemaps-you-are-here
 ```
 
-### CDN (No Build Step)
-
-For quick prototyping or static HTML pages, load directly from a CDN:
+### CDN
 
 ```html
 <!-- Three.js (peer dependency) -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
-<!-- RoveMaps You Are Here SDK -->
-<script src="https://unpkg.com/rovemaps-you-are-here@2.0.0/dist/rovemaps-you-are-here.umd.cjs"></script>
+<!-- RoveMaps YouAreHere -->
+<script src="https://unpkg.com/rovemaps-you-are-here@2.2.0/dist/rovemaps-you-are-here.umd.cjs"></script>
 
 <script>
-  // Access via global
-  const { YouAreHereController, UserMarker, GeolocationProvider } = RoveMapsYouAreHere;
+  const { ThreeYouAreHereController } = RoveMapsYouAreHere;
 </script>
 ```
 
-**CDN Options:**
-
 | CDN | URL |
 |-----|-----|
-| unpkg | `https://unpkg.com/rovemaps-you-are-here@2.0.0/dist/rovemaps-you-are-here.umd.cjs` |
-| jsDelivr | `https://cdn.jsdelivr.net/npm/rovemaps-you-are-here@2.0.0/dist/rovemaps-you-are-here.umd.cjs` |
+| unpkg | `https://unpkg.com/rovemaps-you-are-here@2.2.0/dist/rovemaps-you-are-here.umd.cjs` |
+| jsDelivr | `https://cdn.jsdelivr.net/npm/rovemaps-you-are-here@2.2.0/dist/rovemaps-you-are-here.umd.cjs` |
 
-> **Tip:** Use `@^2.0.0` for auto-updates within major version, or pin to a specific version for production.
+---
 
-## 🚀 Quick Start
-> **Note:** The SDK assumes a **Z-Up** world by default (standard for mapping). If you are using a standard Three.js **Y-Up** scene, see [Advanced Usage](#-advanced-usage).
+## Quick Start
+
+### Three.js
 
 ```typescript
 import * as THREE from 'three';
-import { YouAreHereController } from 'rovemaps-you-are-here';
+import { ThreeYouAreHereController } from 'rovemaps-you-are-here';
 
-// 1. Create your scene
+// Create your scene
 const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight);
+const renderer = new THREE.WebGLRenderer();
 
-// 2. Initialize the all-in-one controller
-const controller = new YouAreHereController({
-  // Center of your local map/venue (Longitude, Latitude)
-  center: [-74.006, 40.7128], 
-  // Scale usually matches your map implementation (e.g. Mapbox world scale)
-  scale: 1, 
+// Initialize the controller
+const controller = new ThreeYouAreHereController({
+  center: [-74.006, 40.7128], // [longitude, latitude] of your map center
+  scale: 1,
   markerOptions: {
     color: 0x4285F4,
     showAccuracyRing: true,
-  }
+    showDirectionCone: true,
+  },
+  onUpdate: (location) => {
+    console.log('Location:', location.latitude, location.longitude);
+  },
+  onError: (error) => {
+    console.error('GPS Error:', error.message);
+  },
 });
 
-// 3. Start tracking
+// Start tracking (requests GPS permission)
 await controller.start(scene);
 
-// 4. Clean up when done
-// controller.dispose();
+// Animation loop
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+
+// Cleanup when done
+controller.dispose();
 ```
 
-## 🔧 Advanced Usage
-
-### Y-Up Orientation (Standard Three.js)
-If your scene uses Y as up (default in Three.js), set the `orientation` option to `'y-up'`. This automatically rotates the marker to lie flat on the XZ plane.
+### MapLibre GL JS
 
 ```typescript
-const marker = new UserMarker({
-  color: 0x4285F4,
-  orientation: 'y-up' // Critical for standard Three.js scenes
+import maplibregl from 'maplibre-gl';
+import { MapLibreYouAreHereController } from 'rovemaps-you-are-here';
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://demotiles.maplibre.org/style.json',
+  center: [-74.006, 40.7128],
+  zoom: 14,
 });
-scene.add(marker);
+
+const controller = new MapLibreYouAreHereController({
+  markerOptions: { color: 0x4285F4 },
+  flyToOnFirstFix: true,
+  flyToZoom: 16,
+});
+
+map.on('load', async () => {
+  await controller.start(map);
+});
 ```
 
-### Manual Wiring (UserMarker + GeolocationProvider)
-For full control, you can instantiate components separately:
+### React + React Three Fiber
+
+```tsx
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useYouAreHere } from 'rovemaps-you-are-here';
+
+function YouAreHereMarker() {
+  const { camera } = useThree();
+
+  const { marker, update, start } = useYouAreHere({
+    center: [-74.006, 40.7128], // NYC
+    autoStart: true,
+    markerOptions: {
+      color: 0x4285f4,
+      showAccuracyRing: true,
+    },
+  });
+
+  useFrame((_, delta) => {
+    update(delta, camera);
+  });
+
+  return <primitive object={marker} />;
+}
+
+function App() {
+  return (
+    <Canvas camera={{ position: [0, 200, 200] }}>
+      <ambientLight />
+      <YouAreHereMarker />
+    </Canvas>
+  );
+}
+```
+
+**Available React Hooks:**
+
+| Hook | Description |
+|------|-------------|
+| `useYouAreHere` | Full marker + geolocation integration for Three.js |
+| `useLocation` | Standalone geolocation hook (no marker) |
+
+See [examples/react](./examples/react) for a complete working example.
+
+---
+
+## API Reference
+
+### ThreeYouAreHereController
+
+The all-in-one controller for Three.js applications.
 
 ```typescript
-import { UserMarker, GeolocationProvider } from 'rovebeacon';
-
-const marker = new UserMarker({ ... });
-scene.add(marker);
-
-const geo = new GeolocationProvider();
-geo.on('update', (loc) => {
-  // You need to handle coordinate conversion manually here
-  const { x, y } = myProjectionFunction(loc.longitude, loc.latitude);
-  marker.setPosition(x, y);
-});
-geo.start();
+const controller = new ThreeYouAreHereController(options);
 ```
 
-## 📖 API Reference
+#### Options
 
-### UserMarker
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `center` | `[number, number]` | **Required** | Map center as `[longitude, latitude]` |
+| `scale` | `number` | `1` | Coordinate scale factor |
+| `markerOptions` | `UserMarkerOptions` | `{}` | Visual appearance options |
+| `geolocationOptions` | `GeolocationOptions` | `{}` | GPS configuration |
+| `enableCompass` | `boolean` | `true` | Enable device compass |
+| `onUpdate` | `(location) => void` | — | Location update callback |
+| `onError` | `(error) => void` | — | Error callback |
+| `onPermissionChange` | `(state) => void` | — | Permission state callback |
 
-A Three.js `Group` that displays the user's location.
+#### Methods
 
-#### Constructor Options
+| Method | Description |
+|--------|-------------|
+| `start(scene)` | Add marker to scene and start GPS tracking |
+| `stop()` | Stop tracking and remove marker |
+| `dispose()` | Clean up all resources |
+| `requestPermissions()` | Request compass permission (iOS) |
+| `isActive()` | Check if controller is running |
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `marker` | `ThreeUserMarker` | Direct access to the marker |
+| `geolocation` | `GeolocationProvider` | Direct access to location provider |
+
+---
+
+### MapLibreYouAreHereController
+
+The all-in-one controller for MapLibre GL JS.
+
+```typescript
+const controller = new MapLibreYouAreHereController(options);
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `markerOptions` | `UserMarkerOptions` | `{}` | Visual appearance options |
+| `geolocationOptions` | `GeolocationOptions` | `{}` | GPS configuration |
+| `enableCompass` | `boolean` | `true` | Enable device compass |
+| `flyToOnFirstFix` | `boolean` | `true` | Auto-fly to user on first GPS fix |
+| `flyToZoom` | `number` | `16` | Zoom level for fly-to |
+| `onUpdate` | `(location) => void` | — | Location update callback |
+| `onError` | `(error) => void` | — | Error callback |
+| `onPermissionChange` | `(state) => void` | — | Permission state callback |
+
+#### Methods
+
+| Method | Description |
+|--------|-------------|
+| `start(map)` | Add marker to map and start GPS tracking |
+| `stop()` | Stop tracking and remove marker |
+| `dispose()` | Clean up all resources |
+| `flyToUser(options?)` | Fly camera to user location |
+
+---
+
+### UserMarkerOptions
+
+Visual configuration for the marker.
 
 ```typescript
 interface UserMarkerOptions {
-  color?: number;                    // Main dot color (default: 0x4285F4)
-  borderColor?: number;              // Border/stroke color (default: 0xffffff)
-  accuracyRingColor?: number;        // Ring and cone color (default: 0x4285F4)
-  dotSize?: number;                  // Dot radius (default: 9)
-  borderWidth?: number;              // Border width (default: 3)
-  showAccuracyRing?: boolean;        // Show accuracy ring (default: true)
-  showDirectionCone?: boolean;       // Show direction cone (default: true)
-  minSpeedForDirection?: number;     // Min speed to show direction (default: 0.5 m/s)
-  coneLength?: number;               // Direction cone length (default: 45)
-  coneWidth?: number;                // Direction cone width (default: 70)
-  coneOpacity?: number;              // Direction cone opacity (default: 0.2)
-  smoothPosition?: boolean;          // Enable smooth position (default: true)
-  smoothHeading?: boolean;           // Enable smooth heading (default: true)
-  positionSmoothingFactor?: number;  // Position lerp speed (default: 0.03)
-  headingSmoothingFactor?: number;   // Heading lerp speed (default: 0.15)
-  // Confidence & Signal Loss
-  signalLostFadeStart?: number;      // Seconds before fade begins (default: 10)
-  signalLostFadeDuration?: number;   // Seconds for full fade out (default: 20)
-  autoFadeOnSignalLoss?: boolean;    // Auto-fade when GPS lost (default: true)
+  // Colors (hex values)
+  color?: number;              // Main dot color (default: 0x4285F4)
+  borderColor?: number;        // Border color (default: 0xFFFFFF)
+  coneColor?: number;          // Direction cone color
+  accuracyRingColor?: number;  // Accuracy ring color
+
+  // Sizes (scene units)
+  dotSize?: number;            // Dot radius (default: 9)
+  borderWidth?: number;        // Border width (default: 3)
+  coneLength?: number;         // Cone length (default: 45)
+  coneWidth?: number;          // Cone width (default: 70)
+
+  // Visibility
+  showAccuracyRing?: boolean;  // Show pulsing ring (default: true)
+  showDirectionCone?: boolean; // Show heading cone (default: true)
+
+  // Animation
+  pulseSpeed?: number;         // Ring pulse speed (default: 0.3)
+  smoothPosition?: boolean;    // Smooth position updates (default: true)
+  smoothHeading?: boolean;     // Smooth heading updates (default: true)
+
+  // Behavior
+  minSpeedForDirection?: number;  // Min speed to show cone (default: 0.5 m/s)
+  orientation?: 'z-up' | 'y-up';  // Coordinate system (default: 'z-up')
 }
 ```
 
-#### Methods
-
-| Method | Description |
-|--------|-------------|
-| `setPosition(x, y, z?)` | Set marker position in scene coordinates |
-| `setAccuracy(meters)` | Set GPS accuracy (affects ring size) |
-| `setHeading(degrees, speed)` | Set heading and speed (shows cone when moving) |
-| `update(dt?, camera?, target?)` | Update animations - call in render loop |
-| `setAccuracyRingVisible(bool)` | Show/hide accuracy ring |
-| `setDirectionConeEnabled(bool)` | Enable/disable direction cone |
-| `dispose()` | Clean up resources |
-
-**Color Methods:**
-
-| Method | Description |
-|--------|-------------|
-| `setDotColor(color)` | Change the main dot color (hex string or number) |
-| `setBorderColor(color)` | Change the border/stroke color |
-| `setRingColor(color)` | Change the accuracy ring, low-confidence circle, and direction cone color |
-
-**Visibility & Confidence Methods:**
-
-| Method | Description |
-|--------|-------------|
-| `hide()` | Manually hide the marker |
-| `show()` | Show the marker after hiding |
-| `setAltitude(meters)` | Set marker altitude/Z position in meters |
-| `setConfidence(state)` | Set confidence state: `'high'`, `'low'`, or `'lost'` |
-
-#### Confidence States
-
-The marker supports three confidence states to reflect GPS signal quality:
-
-| State | Visual Behavior |
-|-------|-----------------|
-| `'high'` | Full opacity dot + border, pulsing accuracy ring, direction cone visible when moving |
-| `'low'` | 50% opacity dot + border, solid expanding circle (no pulse), direction cone hidden |
-| `'lost'` | Dot + border hidden, solid circle slowly expands and fades out over time |
-
-```typescript
-// Example: Handle poor GPS accuracy
-if (location.accuracy > 50) {
-  marker.setConfidence('low');
-} else {
-  marker.setConfidence('high');
-}
-
-// Example: Handle signal loss
-let lastUpdateTime = Date.now();
-geo.on('update', () => {
-  lastUpdateTime = Date.now();
-  marker.setConfidence('high');
-});
-
-setInterval(() => {
-  if (Date.now() - lastUpdateTime > 5000) {
-    marker.setConfidence('lost');
-  }
-}, 1000);
-```
+---
 
 ### GeolocationProvider
 
-Wraps the browser Geolocation API with events.
-
-#### Constructor Options
+Low-level location provider with event-based updates.
 
 ```typescript
-interface GeolocationOptions {
-  enableHighAccuracy?: boolean;  // Use GPS (default: true)
-  maximumAge?: number;           // Max cached position age in ms (default: 0)
-  timeout?: number;              // Request timeout in ms (default: 10000)
-}
+const geo = new GeolocationProvider(options);
+
+geo.on('update', (location) => { /* ... */ });
+geo.on('error', (error) => { /* ... */ });
+geo.on('permissionChange', (state) => { /* ... */ });
+
+await geo.start();
 ```
 
 #### Methods
 
 | Method | Description |
 |--------|-------------|
-| `start()` | Start watching location (returns Promise) |
-| `stop()` | Stop watching location |
-| `getCurrentPosition()` | Get single position (returns Promise) |
-| `isAvailable()` | Check if geolocation is supported |
+| `start()` | Start watching location |
+| `stop()` | Stop watching |
+| `dispose()` | Clean up resources |
+| `getCurrentPosition()` | Get single position fix |
+| `getLastLocation()` | Get cached last location |
 | `getPermissionState()` | Get current permission state |
-| `isWatching()` | Check if currently tracking |
-| `getLastLocation()` | Get most recent location without subscribing |
-| `isSecureContext()` | Check if HTTPS is available (required for geolocation) |
-| `removeAllListeners()` | Clear all event listeners at once |
-| `listenerCount(event)` | Get current listener count per event |
-| `dispose()` | Clean up |
+| `isWatching()` | Check if actively watching |
 
-#### Events
+#### Mock Mode (Development)
 
 ```typescript
-geo.on('update', (location: LocationData) => {
-  // location.longitude, latitude, altitude, accuracy, speed, heading, timestamp
+// Set a single mock location
+geo.setMockLocation({
+  longitude: -74.006,
+  latitude: 40.7128,
+  accuracy: 10,
+  heading: 90,
+  speed: 1.5,
 });
 
-geo.on('error', (error: GeolocationPositionError | Error) => {
-  // Handle error
-});
+// Simulate movement along a path
+const stop = geo.startMockPath([
+  { longitude: -74.006, latitude: 40.7128 },
+  { longitude: -74.005, latitude: 40.7130 },
+  { longitude: -74.004, latitude: 40.7132 },
+], 1000); // 1 second between points
 
-geo.on('permissionChange', (state: PermissionState) => {
-  // 'prompt' | 'granted' | 'denied' | 'unavailable' | 'requesting'
+// Stop simulation
+stop();
+```
+
+> **Note:** Mock mode is automatically disabled when `productionMode: true` is set.
+
+---
+
+### Confidence States
+
+Visual feedback for GPS signal quality.
+
+```typescript
+type ConfidenceState = 'high' | 'low' | 'lost' | 'warning' | 'danger';
+
+// Manual control
+controller.marker.setConfidence('low');
+
+// Automatic (default behavior)
+// - 'low' after 30s without update or accuracy > 100m
+// - 'lost' after 60s without update or accuracy > 500m
+```
+
+| State | Appearance | Trigger |
+|-------|------------|---------|
+| `high` | Blue dot, normal pulse | Good GPS signal |
+| `low` | Blue dot, reduced opacity | 30s stale or >100m accuracy |
+| `lost` | Grey dot, growing ring | 60s stale or >500m accuracy |
+| `warning` | Orange dot, fast pulse | Manual trigger (geofence, etc.) |
+| `danger` | Red dot, fastest pulse | Manual trigger (emergency) |
+
+---
+
+### Error Handling
+
+The SDK uses structured errors with machine-readable codes.
+
+```typescript
+import { RoveError, RoveErrorCode } from 'rovemaps-you-are-here';
+
+controller.geolocation.on('error', (error) => {
+  if (RoveError.is(error, RoveErrorCode.PERMISSION_DENIED)) {
+    showPermissionPrompt();
+  } else if (RoveError.is(error, RoveErrorCode.GPS_SIGNAL_LOST)) {
+    showSignalLostBanner();
+  }
 });
 ```
 
-## 🗺️ Coordinate Conversion
+#### Error Codes
 
-The SDK doesn't include coordinate conversion - you need to convert lat/lng to your scene's coordinate system. Here's an example using Web Mercator:
+| Code | Description |
+|------|-------------|
+| `PERMISSION_DENIED` | User denied location permission |
+| `GPS_SIGNAL_LOST` | Location temporarily unavailable |
+| `TIMEOUT` | Location request timed out |
+| `GEOLOCATION_UNSUPPORTED` | Browser doesn't support geolocation |
+| `INSECURE_CONTEXT` | HTTPS required for geolocation |
+| `INVALID_COORDINATES` | Invalid latitude/longitude values |
+
+---
+
+## Examples
+
+### Custom Colors
 
 ```typescript
-// Simple Mercator projection example
-function lngLatToScene(lng: number, lat: number, center: [number, number]): { x: number, y: number } {
-  const SCALE = 10000; // Adjust based on your scene scale
-  
-  const centerX = (center[0] + 180) / 360;
-  const centerY = (1 - Math.log(Math.tan(center[1] * Math.PI / 180) + 
-    1 / Math.cos(center[1] * Math.PI / 180)) / Math.PI) / 2;
-  
-  const x = (lng + 180) / 360;
-  const y = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 
-    1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2;
-  
-  return {
-    x: (x - centerX) * SCALE,
-    y: -(y - centerY) * SCALE, // Flip Y for Three.js
-  };
+const controller = new ThreeYouAreHereController({
+  center: [-74.006, 40.7128],
+  markerOptions: {
+    color: 0xFF6B6B,           // Coral red
+    borderColor: 0xFFFFFF,
+    accuracyRingColor: 0xFF6B6B,
+    coneColor: 0xFF6B6B,
+  },
+});
+```
+
+### Disable Animations (Low Power Mode)
+
+```typescript
+const controller = new ThreeYouAreHereController({
+  center: [-74.006, 40.7128],
+  markerOptions: {
+    smoothPosition: false,
+    smoothHeading: false,
+    pulseSpeed: 0,              // Disable pulse animation
+    showAccuracyRing: false,    // Hide ring entirely
+  },
+});
+```
+
+### Custom Coordinate System (Y-Up)
+
+```typescript
+// Standard Three.js Y-up scene
+const controller = new ThreeYouAreHereController({
+  center: [-74.006, 40.7128],
+  markerOptions: {
+    orientation: 'y-up',
+  },
+});
+```
+
+### React Integration
+
+```tsx
+import { useEffect, useRef } from 'react';
+import { ThreeYouAreHereController } from 'rovemaps-you-are-here';
+
+function LocationMarker({ scene, center }) {
+  const controllerRef = useRef<ThreeYouAreHereController | null>(null);
+
+  useEffect(() => {
+    const controller = new ThreeYouAreHereController({ center });
+    controllerRef.current = controller;
+
+    controller.start(scene).catch(console.error);
+
+    return () => {
+      controller.dispose();
+    };
+  }, [scene, center]);
+
+  return null;
 }
 ```
 
-## 🛠️ Development
+---
 
-### Run the Example App
+## Project Structure
+
+```
+rovemaps-you-are-here/
+├── src/
+│   ├── lib/
+│   │   ├── index.ts              # Main exports
+│   │   ├── types.ts              # TypeScript interfaces
+│   │   ├── errors.ts             # Error codes and RoveError class
+│   │   ├── sources.ts            # LocationSource interface
+│   │   ├── GeolocationProvider.ts
+│   │   ├── three/
+│   │   │   ├── ThreeUserMarker.ts
+│   │   │   └── ThreeYouAreHereController.ts
+│   │   ├── maplibre/
+│   │   │   ├── MapLibreUserMarker.ts
+│   │   │   └── MapLibreYouAreHereController.ts
+│   │   ├── mapbox/
+│   │   │   ├── MapBoxUserMarker.ts
+│   │   │   └── MapBoxYouAreHereController.ts
+│   │   └── svelte/
+│   │       └── index.ts          # Svelte store helpers
+│   └── utils/
+│       ├── MercatorProjection.ts
+│       └── validation.ts
+├── examples/
+│   ├── cdn-example.html
+│   └── fleet-tracking.html
+├── dist/                         # Built output
+├── docs/
+│   └── plans/
+└── tests/
+```
+
+---
+
+## Development
+
+### Prerequisites
+
+- Node.js 18+
+- npm 9+
+
+### Setup
 
 ```bash
-git clone https://github.com/RussellMiddleton33/RoveBeacon.git
+git clone https://github.com/russellmiddleton33/RoveBeacon.git
 cd RoveBeacon
 npm install
-npm run dev
 ```
 
-### Build the SDK
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start dev server with hot reload |
+| `npm run build` | Build demo application |
+| `npm run build:lib` | Build library for npm |
+| `npm run check` | Run TypeScript type checks |
+| `npm test` | Run unit tests |
+| `npm test -- --coverage` | Run tests with coverage |
+
+### Testing
 
 ```bash
-npm run build:lib
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run specific test file
+npm test -- GeolocationProvider
 ```
 
-This outputs to `dist/`:
-- `rovemaps-you-are-here.js` - ES Module
-- `rovemaps-you-are-here.umd.cjs` - UMD bundle (for CDN/script tags)
-- `*.d.ts` - TypeScript declarations
+---
 
-## 🌐 Browser Support
+## Browser Support
 
-- Chrome 50+
-- Firefox 55+
-- Safari 10+
-- Edge 79+
-- Mobile Safari (iOS 10+)
-- Chrome for Android
+| Browser | Version | Notes |
+|---------|---------|-------|
+| Chrome | 80+ | Full support |
+| Firefox | 78+ | Full support |
+| Safari | 14+ | Requires HTTPS; compass needs user gesture |
+| Edge | 80+ | Full support |
+| iOS Safari | 14+ | Requires HTTPS; compass permission prompt |
+| Chrome Android | 80+ | Full support |
 
-> **Note:** HTTPS is required for geolocation on most browsers.
+> **Important:** Geolocation requires HTTPS in production. `localhost` is allowed for development.
 
-## 🔒 Privacy & Security
+---
 
-**Location data is personally identifiable information (PII).** When using this SDK, you are responsible for:
+## Performance Tips
 
-- **User consent** - Ensure users understand why location is being collected
-- **Data handling** - Don't log or transmit raw coordinates without user consent
-- **Storage** - If storing location history, encrypt it and provide deletion options
-- **Third parties** - Be transparent if location data is shared with analytics or other services
+### Mobile Optimization
 
-The SDK itself:
-- Does **not** make any network requests
-- Does **not** store any data (localStorage, cookies, etc.)
-- Does **not** collect telemetry or analytics
-- Relies entirely on the browser's Geolocation API and permission system
+```typescript
+// For mobile devices, consider reducing visual complexity
+const controller = new ThreeYouAreHereController({
+  center: [-74.006, 40.7128],
+  markerOptions: {
+    pulseSpeed: 0.15,           // Slower pulse
+    showDirectionCone: false,   // Hide cone to reduce draw calls
+  },
+  geolocationOptions: {
+    enableHighAccuracy: true,   // Better accuracy but more battery
+    timeout: 15000,             // Longer timeout for weak signals
+  },
+});
+```
 
-## 🆕 What's New in v2.0.0
+### Memory Management
 
-### Breaking Changes
-- Invalid coordinates now throw errors instead of silently failing
-- `MercatorProjection` and `YouAreHereController` validate inputs on construction
+Always call `dispose()` when removing the marker:
 
-### Bug Fixes
-- Fixed memory leak where animation loop continued after `stop()`
-- Fixed race condition when calling `start()` multiple times
-- Fixed heading normalization for GPS values > 360° or < 0°
-- Fixed altitude scaling (was incorrectly applying Mercator distortion)
-- Fixed event listener memory leaks
+```typescript
+// Cleanup on unmount
+controller.dispose();
+```
 
-### New Features
-- `setConfidence('high' | 'low' | 'lost')` - Indicate GPS signal quality
-- `getLastLocation()` - Get most recent location without subscribing
-- `isSecureContext()` - Check if HTTPS is available
-- Individual color setters: `setDotColor()`, `setBorderColor()`, `setRingColor()`
-- `hide()` / `show()` - Toggle marker visibility
-- `removeAllListeners()` / `listenerCount()` - Event listener management
+---
 
-### Performance
-- Frame-rate independent animations using deltaTime
-- Update throttling (100ms minimum interval)
-- Set-based event listeners for O(1) operations
+## Troubleshooting
 
-See [CHANGELOG.md](./CHANGELOG.md) for full details.
+### "Permission denied" on iOS
 
-## 📄 License
+iOS requires a user gesture to request location permission. Wrap `start()` in a click handler:
 
-MIT
+```typescript
+button.addEventListener('click', async () => {
+  await controller.requestPermissions(); // Compass permission
+  await controller.start(scene);         // Location permission
+});
+```
 
-## 🤝 Contributing
+### Marker not showing
 
-Contributions welcome! Please open an issue or PR.
+1. Ensure GPS permission is granted
+2. Check that `center` coordinates are valid
+3. Verify the marker is within camera view
+4. Check console for error messages
+
+### Jittery compass heading
+
+Increase the heading smoothing factor:
+
+```typescript
+markerOptions: {
+  headingSmoothingFactor: 0.08, // Lower = smoother (default: 0.15)
+}
+```
+
+---
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## License
+
+MIT © [Russell Middleton](https://github.com/russellmiddleton33)
+
+---
+
+<p align="center">
+  <a href="https://russellmiddleton33.github.io/RoveBeacon/">Live Demo</a> ·
+  <a href="https://github.com/russellmiddleton33/RoveBeacon/issues">Report Bug</a> ·
+  <a href="https://github.com/russellmiddleton33/RoveBeacon/issues">Request Feature</a>
+</p>

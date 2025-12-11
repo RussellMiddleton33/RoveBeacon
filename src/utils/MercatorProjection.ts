@@ -3,32 +3,13 @@
  * EPSG:3857 projection for Three.js compatibility
  */
 
+import { isValidNumber, isValidLongitude, isValidLatitude } from './validation';
+
 /** Maximum valid latitude for Web Mercator projection */
 const MAX_MERCATOR_LATITUDE = 85.05112878;
 
 /** Minimum valid latitude for Web Mercator projection */
 const MIN_MERCATOR_LATITUDE = -85.05112878;
-
-/**
- * Validates that a value is a finite number
- */
-function isValidNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-/**
- * Validates longitude is in valid range [-180, 180]
- */
-function isValidLongitude(lng: number): boolean {
-  return isValidNumber(lng) && lng >= -180 && lng <= 180;
-}
-
-/**
- * Validates latitude is in valid range [-90, 90]
- */
-function isValidLatitude(lat: number): boolean {
-  return isValidNumber(lat) && lat >= -90 && lat <= 90;
-}
 
 /**
  * Normalizes longitude to [-180, 180] range

@@ -4,19 +4,26 @@ import type {
   PermissionState,
   GeolocationEvents
 } from './types';
+import { getSDKConfig, sdkWarn, sdkDebug } from './types';
+import { RoveError, RoveErrorCode } from './errors';
+import type { LocationSource } from './sources';
 
 type EventCallback<K extends keyof GeolocationEvents> = (data: GeolocationEvents[K]) => void;
 
 /** Maximum number of listeners per event before warning */
 const MAX_LISTENERS_WARNING = 10;
 
-/** Minimum interval between location updates in ms (throttling) */
-const MIN_UPDATE_INTERVAL_MS = 100;
+/** Default minimum interval between location updates in ms (throttling) */
+const DEFAULT_MIN_UPDATE_INTERVAL_MS = 100;
+
+/** Maximum time to wait for concurrent start() operations (ms) */
+const START_TIMEOUT_MS = 5000;
 
 const DEFAULT_OPTIONS: Required<GeolocationOptions> = {
   enableHighAccuracy: true,
   maximumAge: 0,
   timeout: 10000,
+  maxUpdateRate: 10,
 };
 
 /**
@@ -29,28 +36,8 @@ const DEFAULT_OPTIONS: Required<GeolocationOptions> = {
  * - Protection against concurrent start() calls
  * - Memory leak prevention with max listener warnings
  * - Last known position storage
- *
- * @example
- * ```typescript
- * const geo = new GeolocationProvider();
- *
- * geo.on('update', (location) => {
- *   console.log(location.latitude, location.longitude);
- *   marker.setPosition(convertToScene(location));
- * });
- *
- * geo.on('error', (error) => {
- *   console.error('Location error:', error.message);
- * });
- *
- * geo.on('permissionChange', (state) => {
- *   console.log('Permission:', state);
- * });
- *
- * await geo.start();
- * ```
  */
-export class GeolocationProvider {
+export class GeolocationProvider implements LocationSource {
   private options: Required<GeolocationOptions>;
   private watchId: number | null = null;
   private permissionState: PermissionState = 'prompt';
@@ -58,10 +45,16 @@ export class GeolocationProvider {
   private permissionStatus: PermissionStatus | null = null;
   private lastLocation: LocationData | null = null;
   private lastUpdateTime = 0;
-  private isStarting = false; // Mutex for concurrent start() protection
   private isDisposed = false;
   private isMocking = false; // When true, mock locations are active
   private mockIntervalId: ReturnType<typeof setInterval> | null = null;
+
+  // Promise-based mutex for concurrent start() protection
+  private startPromise: Promise<void> | null = null;
+
+  // Visibility state management
+  private isPaused = false;
+  private boundHandleVisibilityChange: (() => void) | null = null;
 
   // Properly typed event listeners
   private listeners: {
@@ -78,11 +71,75 @@ export class GeolocationProvider {
 
   constructor(options: GeolocationOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
+    this.setupVisibilityListener();
+  }
+
+  /**
+   * Setup listener for page visibility changes
+   * Pauses location updates when tab is hidden to save battery
+   */
+  private setupVisibilityListener(): void {
+    if (typeof document === 'undefined') return;
+
+    this.boundHandleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        this.pause();
+      } else if (document.visibilityState === 'visible') {
+        this.resume();
+      }
+    };
+
+    document.addEventListener('visibilitychange', this.boundHandleVisibilityChange);
+  }
+
+  /**
+   * Pause location tracking (called when tab hidden)
+   * Preserves state so it can be resumed
+   */
+  private pause(): void {
+    if (this.isPaused || this.watchId === null) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    this.isPaused = true;
+    sdkDebug('GeolocationProvider: Pausing due to visibility change');
+
+    // Stop the watch but preserve the watchId marker
+    navigator.geolocation.clearWatch(this.watchId);
+  }
+
+  /**
+   * Resume location tracking (called when tab visible)
+   */
+  private resume(): void {
+    if (!this.isPaused) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    this.isPaused = false;
+    sdkDebug('GeolocationProvider: Resuming after visibility change');
+
+    // Restart watching
+    this.watchId = navigator.geolocation.watchPosition(
+      (position) => this.handlePositionUpdate(position),
+      (error) => this.handlePositionError(error),
+      {
+        enableHighAccuracy: this.options.enableHighAccuracy,
+        maximumAge: this.options.maximumAge,
+        timeout: this.options.timeout,
+      }
+    );
+  }
+
+  /**
+   * Check if tracking is currently paused (tab hidden)
+   */
+  isPausedForVisibility(): boolean {
+    return this.isPaused;
   }
 
   /**
    * Request permission for iOS 13+ DeviceOrientation events
    * Must be called from a user interaction (click/tap) handler
+   * @deprecated Use the instance method requestDeviceOrientationPermission() instead
    */
   static async requestDeviceOrientationPermission(): Promise<PermissionState> {
     if (
@@ -98,6 +155,16 @@ export class GeolocationProvider {
       }
     }
     return 'granted'; // Non-iOS or older devices don't need permission
+  }
+
+  /**
+   * Request permission for iOS 13+ DeviceOrientation events
+   * Must be called from a user interaction (click/tap) handler
+   *
+   * @returns Promise resolving to the permission state ('granted' or 'denied')
+   */
+  async requestDeviceOrientationPermission(): Promise<PermissionState> {
+    return GeolocationProvider.requestDeviceOrientationPermission();
   }
 
   private handleDeviceOrientation = (event: DeviceOrientationEvent) => {
@@ -131,7 +198,7 @@ export class GeolocationProvider {
     callback: EventCallback<K>
   ): () => void {
     if (this.isDisposed) {
-      console.warn('GeolocationProvider: Cannot add listener to disposed instance');
+      sdkWarn('GeolocationProvider: Cannot add listener to disposed instance');
       return () => { /* no-op */ };
     }
 
@@ -139,7 +206,7 @@ export class GeolocationProvider {
 
     // Warn if too many listeners (possible memory leak)
     if (listenerSet.size >= MAX_LISTENERS_WARNING) {
-      console.warn(
+      sdkWarn(
         `GeolocationProvider: Possible memory leak detected. ` +
         `${listenerSet.size + 1} "${event}" listeners added. ` +
         `Consider removing unused listeners.`
@@ -199,7 +266,7 @@ export class GeolocationProvider {
       try {
         cb(data);
       } catch (err) {
-        console.error(`GeolocationProvider: Error in "${event}" listener:`, err);
+        sdkWarn(`GeolocationProvider: Error in "${event}" listener:`, err);
       }
     }
   }
@@ -264,98 +331,118 @@ export class GeolocationProvider {
     }
 
     // Already watching - no-op
-    if (this.watchId !== null) {
+    if (this.watchId !== null && !this.isPaused) {
       return;
     }
 
-    // Prevent concurrent start() race condition
-    if (this.isStarting) {
-      // Wait for the existing start to complete (with timeout)
-      return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 100; // 5 second timeout (100 * 50ms)
-        const checkInterval = setInterval(() => {
-          attempts++;
-          if (attempts > maxAttempts) {
-            clearInterval(checkInterval);
-            reject(new Error('GeolocationProvider: Start timed out waiting for concurrent operation'));
-            return;
-          }
-          if (!this.isStarting) {
-            clearInterval(checkInterval);
-            if (this.watchId !== null) {
-              resolve();
-            } else {
-              reject(new Error('GeolocationProvider: Start failed'));
-            }
-          }
-        }, 50);
-      });
+    // If resuming from paused state, just resume
+    if (this.isPaused) {
+      this.resume();
+      return;
     }
 
-    this.isStarting = true;
+    // Promise-based mutex: if start is already in progress, return the same promise
+    if (this.startPromise !== null) {
+      return this.startPromise;
+    }
+
+    // Create the start promise
+    this.startPromise = this.doStart();
 
     try {
-      if (!this.isAvailable()) {
-        this.setPermissionState('unavailable');
-        const error = new Error('Geolocation is not supported by this browser');
-        (error as any).code = 'GEOLOCATION_UNSUPPORTED';
-        this.emit('error', error);
-        throw error;
-      }
-
-      // Check HTTPS requirement
-      if (!this.isSecureContext()) {
-        console.warn(
-          'GeolocationProvider: Geolocation requires HTTPS in modern browsers. ' +
-          'Location requests may fail on non-secure origins.'
-        );
-      }
-
-      // Check permission status if Permissions API is available
-      await this.setupPermissionListener();
-
-      this.setPermissionState('requesting');
-
-      return await new Promise<void>((resolve, reject) => {
-        let resolved = false;
-
-        this.watchId = navigator.geolocation.watchPosition(
-          (position) => {
-            this.handlePositionUpdate(position);
-
-            // Resolve on first successful position
-            if (!resolved) {
-              resolved = true;
-              resolve();
-            }
-          },
-          (error) => {
-            this.handlePositionError(error);
-
-            // Reject if this is the first call (permission denied or other error)
-            if (!resolved) {
-              resolved = true;
-              reject(error);
-            }
-          },
-          {
-            enableHighAccuracy: this.options.enableHighAccuracy,
-            maximumAge: this.options.maximumAge,
-            timeout: this.options.timeout,
-          }
-        );
-      });
+      await this.startPromise;
     } finally {
-      this.isStarting = false;
+      this.startPromise = null;
     }
+  }
+
+  /**
+   * Internal start implementation
+   */
+  private async doStart(): Promise<void> {
+    if (!this.isAvailable()) {
+      this.setPermissionState('unavailable');
+      const error = new RoveError(
+        RoveErrorCode.GEOLOCATION_UNSUPPORTED,
+        'Geolocation is not supported by this browser'
+      );
+      this.emit('error', error);
+      throw error;
+    }
+
+    // Check HTTPS requirement
+    if (!this.isSecureContext()) {
+      const error = new RoveError(
+        RoveErrorCode.INSECURE_CONTEXT,
+        'Geolocation requires HTTPS in modern browsers.'
+      );
+      // We warn but don't hard-fail immediately as localhost might pass isSecureContext check differently in some envs
+      // or user might be on a weird browser. But most likely it will fail.
+      sdkWarn(error.message);
+    }
+
+    // Check permission status if Permissions API is available
+    await this.setupPermissionListener();
+
+    this.setPermissionState('requesting');
+
+    return new Promise<void>((resolve, reject) => {
+      let resolved = false;
+
+      // Add timeout for the entire operation
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          const error = new RoveError(
+            RoveErrorCode.TIMEOUT,
+            'Geolocation start timed out'
+          );
+          reject(error);
+        }
+      }, START_TIMEOUT_MS);
+
+      this.watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          this.handlePositionUpdate(position);
+
+          // Resolve on first successful position
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeoutId);
+            resolve();
+          }
+        },
+        (error) => {
+          this.handlePositionError(error);
+
+          // Reject if this is the first call (permission denied or other error)
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeoutId);
+            // handlePositionError already emits the error, we just need to reject the promise
+            // We should reconstruct the RoveError to return it
+            let code = RoveErrorCode.INTERNAL_ERROR;
+            if (error.code === error.PERMISSION_DENIED) code = RoveErrorCode.PERMISSION_DENIED;
+            else if (error.code === error.TIMEOUT) code = RoveErrorCode.TIMEOUT;
+            else if (error.code === error.POSITION_UNAVAILABLE) code = RoveErrorCode.GPS_SIGNAL_LOST;
+
+            reject(new RoveError(code, error.message, error));
+          }
+        },
+        {
+          enableHighAccuracy: this.options.enableHighAccuracy,
+          maximumAge: this.options.maximumAge,
+          timeout: this.options.timeout,
+        }
+      );
+    });
   }
 
   /**
    * Setup permission status listener (if Permissions API is available)
    */
   private async setupPermissionListener(): Promise<void> {
-    if (!('permissions' in navigator)) {
+    if (typeof navigator === 'undefined' || !('permissions' in navigator)) {
       return;
     }
 
@@ -364,7 +451,7 @@ export class GeolocationProvider {
 
       if (result.state === 'denied') {
         this.setPermissionState('denied');
-        const error = new Error('Location permission denied');
+        const error = new RoveError(RoveErrorCode.PERMISSION_DENIED, 'Location permission previously denied');
         this.emit('error', error);
         throw error;
       }
@@ -386,10 +473,20 @@ export class GeolocationProvider {
           this.stop();
         }
       };
-    } catch {
-      // Permissions API not fully supported (e.g., Safari < 16)
-      // Continue without permission state tracking - geolocation will still work
+    } catch (e) {
+      if (e instanceof RoveError) throw e;
+      // Permissions API not fully supported or other error
+      // Continue without permission state tracking
     }
+  }
+
+  /**
+   * Get minimum update interval based on maxUpdateRate option
+   */
+  private get minUpdateInterval(): number {
+    const maxRate = this.options.maxUpdateRate;
+    // Convert rate (updates/sec) to interval (ms), with minimum floor
+    return Math.max(DEFAULT_MIN_UPDATE_INTERVAL_MS, 1000 / maxRate);
   }
 
   /**
@@ -399,7 +496,7 @@ export class GeolocationProvider {
     const now = Date.now();
 
     // Throttle updates to prevent performance issues on devices that fire rapidly
-    if (now - this.lastUpdateTime < MIN_UPDATE_INTERVAL_MS && this.updateCount > 0) {
+    if (now - this.lastUpdateTime < this.minUpdateInterval && this.updateCount > 0) {
       return;
     }
 
@@ -425,11 +522,40 @@ export class GeolocationProvider {
    * Handle position error
    */
   private handlePositionError(error: GeolocationPositionError): void {
-    if (error.code === error.PERMISSION_DENIED) {
-      this.setPermissionState('denied');
+    let roveError: RoveError;
+
+    switch (error.code) {
+      case error.PERMISSION_DENIED:
+        this.setPermissionState('denied');
+        roveError = new RoveError(
+          RoveErrorCode.PERMISSION_DENIED,
+          'Location permission denied by user',
+          error
+        );
+        break;
+      case error.POSITION_UNAVAILABLE:
+        roveError = new RoveError(
+          RoveErrorCode.GPS_SIGNAL_LOST,
+          'Location unavailable',
+          error
+        );
+        break;
+      case error.TIMEOUT:
+        roveError = new RoveError(
+          RoveErrorCode.TIMEOUT,
+          'Location request timed out',
+          error
+        );
+        break;
+      default:
+        roveError = new RoveError(
+          RoveErrorCode.INTERNAL_ERROR,
+          error.message,
+          error
+        );
     }
 
-    this.emit('error', error);
+    this.emit('error', roveError);
   }
 
   /**
@@ -437,7 +563,9 @@ export class GeolocationProvider {
    */
   stop(): void {
     if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(this.watchId);
+      }
       this.watchId = null;
     }
   }
@@ -447,14 +575,19 @@ export class GeolocationProvider {
    */
   async getCurrentPosition(): Promise<LocationData> {
     if (this.isDisposed) {
-      throw new Error('GeolocationProvider: Cannot use disposed instance');
+      throw new RoveError(RoveErrorCode.INTERNAL_ERROR, 'Cannot use disposed instance');
     }
 
     if (!this.isAvailable()) {
-      throw new Error('Geolocation is not supported');
+      throw new RoveError(RoveErrorCode.GEOLOCATION_UNSUPPORTED, 'Geolocation not available');
     }
 
     return new Promise((resolve, reject) => {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        reject(new RoveError(RoveErrorCode.GEOLOCATION_UNSUPPORTED, 'Geolocation not available'));
+        return;
+      }
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const locationData: LocationData = {
@@ -469,7 +602,14 @@ export class GeolocationProvider {
           this.lastLocation = locationData;
           resolve(locationData);
         },
-        reject,
+        (error) => {
+          let code = RoveErrorCode.INTERNAL_ERROR;
+          if (error.code === error.PERMISSION_DENIED) code = RoveErrorCode.PERMISSION_DENIED;
+          else if (error.code === error.TIMEOUT) code = RoveErrorCode.TIMEOUT;
+          else if (error.code === error.POSITION_UNAVAILABLE) code = RoveErrorCode.GPS_SIGNAL_LOST;
+
+          reject(new RoveError(code, error.message, error));
+        },
         {
           enableHighAccuracy: this.options.enableHighAccuracy,
           maximumAge: this.options.maximumAge,
@@ -497,6 +637,8 @@ export class GeolocationProvider {
    * Set a mock location for testing/demo purposes
    * This emits a location update event with the provided coordinates
    *
+   * Note: Disabled when SDK is in production mode
+   *
    * @param location The mock location data
    * @example
    * ```typescript
@@ -513,7 +655,13 @@ export class GeolocationProvider {
    */
   setMockLocation(location: LocationData): void {
     if (this.isDisposed) {
-      console.warn('GeolocationProvider: Cannot set mock location on disposed instance');
+      sdkWarn('GeolocationProvider: Cannot set mock location on disposed instance');
+      return;
+    }
+
+    // Disable mock mode in production
+    if (getSDKConfig().productionMode) {
+      sdkWarn('GeolocationProvider: Mock location disabled in production mode');
       return;
     }
 
@@ -539,6 +687,8 @@ export class GeolocationProvider {
    * Start a mock location simulation that moves along a path
    * Useful for demos and testing movement scenarios
    *
+   * Note: Disabled when SDK is in production mode
+   *
    * @param locations Array of locations to cycle through
    * @param intervalMs Time between location updates in milliseconds (default: 1000)
    * @returns Function to stop the simulation
@@ -556,13 +706,19 @@ export class GeolocationProvider {
    */
   startMockPath(locations: Partial<LocationData>[], intervalMs: number = 1000): () => void {
     if (this.isDisposed) {
-      console.warn('GeolocationProvider: Cannot start mock path on disposed instance');
-      return () => {};
+      sdkWarn('GeolocationProvider: Cannot start mock path on disposed instance');
+      return () => { };
+    }
+
+    // Disable mock mode in production
+    if (getSDKConfig().productionMode) {
+      sdkWarn('GeolocationProvider: Mock path disabled in production mode');
+      return () => { };
     }
 
     if (!locations || locations.length === 0) {
-      console.warn('GeolocationProvider: Mock path requires at least one location');
-      return () => {};
+      sdkWarn('GeolocationProvider: Mock path requires at least one location');
+      return () => { };
     }
 
     // Stop any existing mock simulation
@@ -641,6 +797,12 @@ export class GeolocationProvider {
     if (this.permissionStatus) {
       this.permissionStatus.onchange = null;
       this.permissionStatus = null;
+    }
+
+    // Clean up visibility change listener
+    if (this.boundHandleVisibilityChange && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.boundHandleVisibilityChange);
+      this.boundHandleVisibilityChange = null;
     }
 
     // Clear all listeners

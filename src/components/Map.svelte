@@ -3,17 +3,16 @@
   import * as THREE from "three";
   import { MapControls } from "three/addons/controls/MapControls.js";
   import { MercatorProjection } from "../utils/MercatorProjection";
-  import DebugControls from "./DebugControls.svelte";
   import {
-    YouAreHereController,
+    ThreeYouAreHereController,
     type LocationData,
     type PermissionState,
     type YouAreHereControllerOptions,
   } from "../lib";
 
   export let center: [number, number] = [-122.4194, 37.7749]; // Default SF
-  export let zoom: number = 16;
-  export let pitch: number = 45;
+  export let zoom: number = 18;
+  export let pitch: number = 10; // Near birds-eye view
 
   let container: HTMLDivElement;
   let renderer: THREE.WebGLRenderer;
@@ -23,7 +22,7 @@
   let projection: MercatorProjection;
 
   // SDK Controller
-  let controller: YouAreHereController;
+  let controller: ThreeYouAreHereController;
 
   // State for Tiles
   let tileGroup: THREE.Group;
@@ -32,16 +31,33 @@
   // State for UI
   let currentLocation: [number, number] | null = null;
   let isFollowingUser = true;
-  let confidenceState: "high" | "low" | "lost" = "high";
+  let confidenceState: "high" | "low" | "lost" | "warning" | "danger" = "high";
   let isMarkerHidden = false;
 
   // Color settings
   let dotColor = "#4285F4";
   let borderColor = "#ffffff";
   let ringColor = "#4285F4";
+  let coneColor = "#4285F4";
+
+  // Marker height in meters
+  let markerHeight = 0;
+
+  // Marker scale, ring scale, pulse speed, and dot stroke
+  let markerScale = 1;
+  let ringScale = 0.7;
+  let pulseSpeed = 0.2;
+  let dotStrokeWidth = 3;
+
+  // Auto-confidence tracking
+  let autoConfidenceEnabled = true;
+
+  // Fixed screen size mode (like MapLibre)
+  let fixedScreenSize = true;
 
   // UI Control State
-  let showControls = false;
+  let showControls = true;
+  let showLocationPanel = true;
   let signalLostFadeStart = 10;
   let signalLostFadeDuration = 20;
 
@@ -66,25 +82,8 @@
   let locationPermission: PermissionState = "prompt";
   let locationError: string | null = null;
 
-  let debugParams = {
-    fov: 60,
-    near: 10,
-    far: 1000000,
-    scale: 1,
-  };
-
   const dispatch = createEventDispatcher();
   const SCENE_SCALE = 78271.48;
-
-  function updateCameraParams(event: CustomEvent) {
-    if (!camera) return;
-    const params = event.detail;
-    debugParams = params;
-    camera.fov = params.fov;
-    camera.near = params.near;
-    camera.far = params.far;
-    camera.updateProjectionMatrix();
-  }
 
   function init() {
     console.log("Init started (SDK Controller)");
@@ -112,6 +111,21 @@
       renderer.setPixelRatio(window.devicePixelRatio);
       container.appendChild(renderer.domElement);
 
+      // Handle DPR changes (zoom, moving windows)
+      const updateDpr = () => {
+        const newDpr = window.devicePixelRatio;
+        renderer.setPixelRatio(newDpr);
+        // Re-listen for next change
+        matchMedia(`(resolution: ${newDpr}dppx)`).addEventListener(
+          "change",
+          updateDpr,
+          { once: true },
+        );
+      };
+      matchMedia(
+        `(resolution: ${window.devicePixelRatio}dppx)`,
+      ).addEventListener("change", updateDpr, { once: true });
+
       // 3. Setup Controls
       controls = new MapControls(camera, renderer.domElement);
       controls.enableDamping = true;
@@ -121,8 +135,8 @@
       controls.maxDistance = 500000;
       controls.maxPolarAngle = Math.PI / 2;
 
-      // Initial camera position relative to center
-      camera.position.set(centerX, centerY - 1200, 1200);
+      // Initial camera position - true birds-eye view (directly above), zoomed in close
+      camera.position.set(centerX, centerY, 150);
       controls.target.set(centerX, centerY, 0);
 
       controls.addEventListener("start", () => {
@@ -152,7 +166,7 @@
       // 5. Initialize SDK Controller
       // Note: Our map tiles are Z-up.
       // SDK defaults to Z-up. Perfect match.
-      controller = new YouAreHereController({
+      controller = new ThreeYouAreHereController({
         center: center,
         scale: SCENE_SCALE,
         markerOptions: {
@@ -225,12 +239,11 @@
       const pos = projection.lngLatToScene(loc.longitude, loc.latitude);
       const targetPos = new THREE.Vector3(pos[0], pos[1], 0);
 
-      // On first location update, snap camera immediately to user position
+      // On first location update, snap camera to user position with desired view
       if (locationInfo.updateCount === 1) {
         controls.target.copy(targetPos);
-        // Also move camera position to maintain relative offset
-        const offset = camera.position.clone().sub(controls.target);
-        camera.position.copy(targetPos).add(offset);
+        // Set camera for zoom ~17, birds-eye view (pitch 0 = directly above)
+        camera.position.set(targetPos.x, targetPos.y, 300);
       } else {
         // Subsequent updates: smooth lerp
         controls.target.lerp(targetPos, 0.1);
@@ -255,7 +268,9 @@
 
   // --- UI Controls Wrappers ---
 
-  function setConfidence(state: "high" | "low" | "lost") {
+  function setConfidence(
+    state: "high" | "low" | "lost" | "warning" | "danger",
+  ) {
     confidenceState = state;
     if (controller) controller.marker.setConfidence(state);
   }
@@ -282,14 +297,90 @@
     controller?.marker.setRingColor(parseInt(color.replace("#", "0x")));
   }
 
+  function updateConeColor(color: string) {
+    controller?.marker.setConeColor(parseInt(color.replace("#", "0x")));
+  }
+
+  function updateMarkerHeight(height: number) {
+    if (!controller) return;
+    const pos = controller.marker.position;
+    // Height in meters - scale factor converts meters to scene units
+    // At this scale, 1 meter ≈ SCENE_SCALE / 111320 (meters per degree at equator)
+    const metersToScene = SCENE_SCALE / 111320;
+    controller.marker.setPosition(pos.x, pos.y, height * metersToScene);
+  }
+
+  function toggleFixedScreenSize(enabled: boolean) {
+    if (!controller) return;
+    // Access options directly since TypeScript doesn't expose it
+    (controller.marker as any).options.fixedScreenSize = enabled;
+  }
+
+  function updateMarkerScale(scale: number) {
+    if (!controller) return;
+    controller.marker.setOverallScale(scale);
+  }
+
+  function updatePulseSpeed(speed: number) {
+    if (!controller) return;
+    controller.marker.setPulseSpeed(speed);
+  }
+
+  function updateRingScale(scale: number) {
+    if (!controller) return;
+    controller.marker.setRingScale(scale);
+  }
+
+  function updateDotStrokeWidth(width: number) {
+    if (!controller) return;
+    controller.marker.setDotStrokeWidth(width);
+  }
+
+  function toggleAutoConfidence(enabled: boolean) {
+    if (!controller) return;
+    autoConfidenceEnabled = enabled;
+    if (enabled) {
+      controller.marker.resetAutoConfidence();
+    }
+  }
+
+  // Exported methods for parent component to call
+  export function setMarkerScale(scale: number) {
+    if (!controller) return;
+    controller.marker.setOverallScale(scale);
+  }
+
+  export function setMarkerPulseSpeed(speed: number) {
+    if (!controller) return;
+    controller.marker.setPulseSpeed(speed);
+  }
+
+  let lastAnimateTime = performance.now();
+
   function animate() {
     requestAnimationFrame(animate);
+
+    const now = performance.now();
+    const dt = (now - lastAnimateTime) / 1000;
+    lastAnimateTime = now;
+    const clampedDt = Math.min(dt, 0.1); // Max 100ms
+
     if (controls) controls.update();
+
+    // Update marker with camera info for fixed screen size scaling
+    if (controller?.marker && camera && controls) {
+      controller.marker.update(clampedDt, camera, controls.target);
+
+      // Track confidence state from marker (updates UI in real-time)
+      const currentConfidence = controller.marker.getConfidence();
+      if (currentConfidence !== confidenceState) {
+        confidenceState = currentConfidence;
+      }
+    }
+
     if (renderer && scene && camera) {
       renderer.render(scene, camera);
     }
-
-    // SDK handles marker animation internally
   }
 
   function onWindowResize() {
@@ -464,7 +555,7 @@
       () => {
         // Error loading tile, still call onLoad to prevent hanging
         onLoad?.();
-      }
+      },
     );
   }
 
@@ -495,127 +586,133 @@
 
 <div bind:this={container} class="map-container"></div>
 
-<DebugControls
-  fov={debugParams.fov}
-  near={debugParams.near}
-  far={debugParams.far}
-  scale={debugParams.scale}
-  on:update={updateCameraParams}
-/>
+<!-- Location & Camera Info -->
+{#if showLocationPanel}
+  <div class="info-overlay location-info">
+    <div class="info-label">Location</div>
 
-<!-- Camera Info -->
-<div class="info-overlay camera-info">
-  <div class="info-label">Camera</div>
-  <div>Zoom: {info.zoom.toFixed(1)}</div>
-  <div>Pitch: {info.pitch.toFixed(0)}°</div>
-  <div>Bearing: {info.bearing.toFixed(0)}°</div>
-</div>
-
-<!-- Location Info -->
-<div class="info-overlay location-info">
-  <div class="info-label">Location</div>
-
-  {#if locationPermission === "prompt" || locationPermission === "requesting"}
-    <div class="permission-prompt">
-      <div class="prompt-icon">📍</div>
-      <div class="prompt-text">
-        {locationPermission === "requesting"
-          ? "Requesting location..."
-          : "Waiting for permission..."}
+    {#if locationPermission === "prompt" || locationPermission === "requesting"}
+      <div class="permission-prompt">
+        <div class="prompt-icon">📍</div>
+        <div class="prompt-text">
+          {locationPermission === "requesting"
+            ? "Requesting location..."
+            : "Waiting for permission..."}
+        </div>
+        {#if locationPermission === "prompt"}
+          <button
+            class="enable-location-btn"
+            on:click={requestLocationPermission}
+          >
+            Enable Location
+          </button>
+        {/if}
       </div>
-      {#if locationPermission === "prompt"}
-        <button
-          class="enable-location-btn"
-          on:click={requestLocationPermission}
-        >
-          Enable Location
+    {:else if locationPermission === "denied" || locationPermission === "unavailable"}
+      <div class="permission-error">
+        <div class="error-icon">⚠️</div>
+        <div class="error-text">{locationError}</div>
+        <button class="retry-btn" on:click={requestLocationPermission}>
+          Try Again
         </button>
-      {/if}
-    </div>
-  {:else if locationPermission === "denied" || locationPermission === "unavailable"}
-    <div class="permission-error">
-      <div class="error-icon">⚠️</div>
-      <div class="error-text">{locationError}</div>
-      <button class="retry-btn" on:click={requestLocationPermission}>
-        Try Again
-      </button>
-    </div>
-  {:else}
-    <div class="speed-display">
-      <span class="speed-value">{formatSpeed(locationInfo.speed)}</span>
-    </div>
-    <div class="heading-display">
-      <span class="heading-icon">🧭</span>
-      <span>{formatHeading(locationInfo.heading)}</span>
-    </div>
+      </div>
+    {:else}
+      <div class="speed-display">
+        <span class="speed-value">{formatSpeed(locationInfo.speed)}</span>
+      </div>
+      <div class="heading-display">
+        <span class="heading-icon">🧭</span>
+        <span>{formatHeading(locationInfo.heading)}</span>
+      </div>
 
-    <div class="data-grid">
-      <div class="data-row">
-        <span class="data-label">Lat</span>
-        <span class="data-value"
-          >{currentLocation ? currentLocation[1].toFixed(6) : "—"}</span
-        >
+      <div class="data-grid">
+        <div class="data-row">
+          <span class="data-label">Lat</span>
+          <span class="data-value"
+            >{currentLocation ? currentLocation[1].toFixed(6) : "—"}</span
+          >
+        </div>
+        <div class="data-row">
+          <span class="data-label">Lng</span>
+          <span class="data-value"
+            >{currentLocation ? currentLocation[0].toFixed(6) : "—"}</span
+          >
+        </div>
+        <div class="data-row">
+          <span class="data-label">Alt</span>
+          <span class="data-value"
+            >{locationInfo.altitude !== null
+              ? `${locationInfo.altitude.toFixed(1)}m`
+              : "—"}</span
+          >
+        </div>
+        <div class="data-row">
+          <span class="data-label">Speed</span>
+          <span class="data-value"
+            >{locationInfo.speed
+              ? `${locationInfo.speed.toFixed(2)} m/s`
+              : "0"}</span
+          >
+        </div>
+        <div class="data-row">
+          <span class="data-label">Heading</span>
+          <span class="data-value"
+            >{locationInfo.heading !== null
+              ? `${locationInfo.heading.toFixed(1)}°`
+              : "—"}</span
+          >
+        </div>
+        <div class="data-row">
+          <span class="data-label">Accuracy</span>
+          <span class="data-value">±{locationInfo.accuracy.toFixed(1)}m</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">Confidence</span>
+          <span class="data-value confidence-{confidenceState}"
+            >{confidenceState}</span
+          >
+        </div>
+        <div class="data-row">
+          <span class="data-label">Updates</span>
+          <span class="data-value">{locationInfo.updateCount}</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">Last</span>
+          <span class="data-value"
+            >{locationInfo.lastUpdateTime
+              ? new Date(locationInfo.lastUpdateTime).toLocaleTimeString()
+              : "—"}</span
+          >
+        </div>
       </div>
-      <div class="data-row">
-        <span class="data-label">Lng</span>
-        <span class="data-value"
-          >{currentLocation ? currentLocation[0].toFixed(6) : "—"}</span
-        >
-      </div>
-      <div class="data-row">
-        <span class="data-label">Alt</span>
-        <span class="data-value"
-          >{locationInfo.altitude !== null
-            ? `${locationInfo.altitude.toFixed(1)}m`
-            : "—"}</span
-        >
-      </div>
-      <div class="data-row">
-        <span class="data-label">Speed</span>
-        <span class="data-value"
-          >{locationInfo.speed
-            ? `${locationInfo.speed.toFixed(2)} m/s`
-            : "0"}</span
-        >
-      </div>
-      <div class="data-row">
-        <span class="data-label">Heading</span>
-        <span class="data-value"
-          >{locationInfo.heading !== null
-            ? `${locationInfo.heading.toFixed(1)}°`
-            : "—"}</span
-        >
-      </div>
-      <div class="data-row">
-        <span class="data-label">Accuracy</span>
-        <span class="data-value">±{locationInfo.accuracy.toFixed(1)}m</span>
-      </div>
-      <div class="data-row">
-        <span class="data-label">Updates</span>
-        <span class="data-value">{locationInfo.updateCount}</span>
-      </div>
-      <div class="data-row">
-        <span class="data-label">Last</span>
-        <span class="data-value"
-          >{locationInfo.lastUpdateTime
-            ? new Date(locationInfo.lastUpdateTime).toLocaleTimeString()
-            : "—"}</span
-        >
-      </div>
-    </div>
-  {/if}
-</div>
 
-<!-- Follow Button -->
+      <div class="info-label camera-label">Camera</div>
+      <div class="data-grid">
+        <div class="data-row">
+          <span class="data-label">Zoom</span>
+          <span class="data-value">{info.zoom.toFixed(1)}</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">Pitch</span>
+          <span class="data-value">{info.pitch.toFixed(0)}°</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">Bearing</span>
+          <span class="data-value">{info.bearing.toFixed(0)}°</span>
+        </div>
+      </div>
+    {/if}
+  </div>
+{/if}
+
+<!-- Location Toggle Button -->
 <button
-  class="follow-button"
-  class:active={isFollowingUser}
+  class="location-toggle-btn"
   on:click={() => {
-    isFollowingUser = !isFollowingUser;
+    showLocationPanel = !showLocationPanel;
   }}
 >
-  <span class="follow-icon">{isFollowingUser ? "📍" : "🔓"}</span>
-  {isFollowingUser ? "Following" : "Free"}
+  {showLocationPanel ? "✕" : "📍"} Location
 </button>
 
 <!-- SDK Controls Toggle -->
@@ -648,6 +745,27 @@
           class:active={confidenceState === "lost"}
           on:click={() => setConfidence("lost")}>Lost</button
         >
+        <button
+          class="warning-btn"
+          class:active={confidenceState === "warning"}
+          on:click={() => setConfidence("warning")}>Warning</button
+        >
+        <button
+          class="danger-btn"
+          class:active={confidenceState === "danger"}
+          on:click={() => setConfidence("danger")}>Danger</button
+        >
+      </div>
+      <div class="sdk-checkbox-row" style="margin-top: 8px;">
+        <label for="auto-confidence">
+          <input
+            id="auto-confidence"
+            type="checkbox"
+            bind:checked={autoConfidenceEnabled}
+            on:change={() => toggleAutoConfidence(autoConfidenceEnabled)}
+          />
+          Auto-confidence (staleness/accuracy)
+        </label>
       </div>
     </div>
 
@@ -687,6 +805,99 @@
           bind:value={ringColor}
           on:input={() => updateRingColor(ringColor)}
         />
+      </div>
+      <div class="sdk-color-row">
+        <label for="cone-color">Heading</label>
+        <input
+          id="cone-color"
+          type="color"
+          bind:value={coneColor}
+          on:input={() => updateConeColor(coneColor)}
+        />
+      </div>
+    </div>
+
+    <div class="sdk-section">
+      <div class="sdk-section-title">Marker Size & Pulse</div>
+      <div class="sdk-slider-row">
+        <label for="marker-scale">Scale: {markerScale.toFixed(1)}x</label>
+        <input
+          id="marker-scale"
+          type="range"
+          min="0.5"
+          max="3"
+          step="0.1"
+          bind:value={markerScale}
+          on:input={() => updateMarkerScale(markerScale)}
+        />
+      </div>
+      <div class="sdk-slider-row">
+        <label for="ring-scale">Ring Scale: {ringScale.toFixed(1)}x</label>
+        <input
+          id="ring-scale"
+          type="range"
+          min="0.5"
+          max="5"
+          step="0.1"
+          bind:value={ringScale}
+          on:input={() => updateRingScale(ringScale)}
+        />
+      </div>
+      <div class="sdk-slider-row">
+        <label for="pulse-speed">Pulse Speed: {pulseSpeed.toFixed(2)}</label>
+        <input
+          id="pulse-speed"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          bind:value={pulseSpeed}
+          on:input={() => updatePulseSpeed(pulseSpeed)}
+        />
+      </div>
+      <div class="sdk-slider-row">
+        <label for="dot-stroke">Dot Stroke: {dotStrokeWidth.toFixed(0)}px</label
+        >
+        <input
+          id="dot-stroke"
+          type="range"
+          min="0"
+          max="10"
+          step="1"
+          bind:value={dotStrokeWidth}
+          on:input={() => updateDotStrokeWidth(dotStrokeWidth)}
+        />
+      </div>
+    </div>
+
+    <div class="sdk-section">
+      <div class="sdk-section-title">Marker Height</div>
+      <div class="sdk-slider-row">
+        <label for="marker-height">Height: {markerHeight}m</label>
+        <input
+          id="marker-height"
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          bind:value={markerHeight}
+          on:input={() => updateMarkerHeight(markerHeight)}
+        />
+      </div>
+    </div>
+
+    <div class="sdk-section">
+      <div class="sdk-section-title">Scale Mode</div>
+      <div class="sdk-checkbox-row">
+        <label for="fixed-size">
+          <input
+            id="fixed-size"
+            type="checkbox"
+            bind:checked={fixedScreenSize}
+            on:change={() => toggleFixedScreenSize(fixedScreenSize)}
+          />
+          Fixed Screen Size (like MapLibre)
+        </label>
       </div>
     </div>
 
@@ -731,7 +942,8 @@
 <style>
   .map-container {
     width: 100%;
-    height: 100%;
+    width: 100%;
+    height: 100dvh;
     background: #1a1a2e;
   }
 
@@ -750,15 +962,9 @@
     line-height: 1.6;
   }
 
-  .camera-info {
-    top: 20px;
-    left: 20px;
-  }
-
   .location-info {
     top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 20px;
     text-align: center;
     min-width: 200px;
     pointer-events: auto;
@@ -789,6 +995,31 @@
     color: rgba(255, 255, 255, 0.9);
     font-family: "SF Mono", Monaco, monospace;
     font-size: 11px;
+  }
+
+  .confidence-high {
+    color: #4285f4;
+    font-weight: 600;
+  }
+
+  .confidence-low {
+    color: #a0a0a0;
+    font-weight: 600;
+  }
+
+  .confidence-lost {
+    color: #888888;
+    font-weight: 600;
+  }
+
+  .confidence-warning {
+    color: #ff9500;
+    font-weight: 600;
+  }
+
+  .confidence-danger {
+    color: #ff3b30;
+    font-weight: 600;
   }
 
   .permission-prompt,
@@ -842,6 +1073,12 @@
     margin-bottom: 4px;
   }
 
+  .camera-label {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
   .speed-display {
     margin: 8px 0;
   }
@@ -864,10 +1101,10 @@
     font-size: 18px;
   }
 
-  .follow-button {
+  .location-toggle-btn {
     position: fixed;
-    bottom: 30px;
-    right: 20px;
+    bottom: calc(30px + env(safe-area-inset-bottom));
+    left: 20px;
     background: rgba(26, 26, 46, 0.9);
     color: white;
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -878,29 +1115,17 @@
     cursor: pointer;
     z-index: 1000;
     backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    gap: 8px;
     transition: all 0.3s ease;
   }
 
-  .follow-button:hover {
+  .location-toggle-btn:hover {
     background: rgba(66, 133, 244, 0.3);
-  }
-
-  .follow-button.active {
-    background: rgba(66, 133, 244, 0.8);
-    border-color: #4285f4;
-  }
-
-  .follow-icon {
-    font-size: 16px;
   }
 
   /* SDK Controls */
   .sdk-toggle-btn {
     position: fixed;
-    bottom: 30px;
+    bottom: calc(30px + env(safe-area-inset-bottom));
     right: 140px;
     background: rgba(26, 26, 46, 0.9);
     color: white;
@@ -932,7 +1157,7 @@
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     min-width: 240px;
-    max-height: calc(100vh - 60px);
+    max-height: calc(100dvh - 60px - env(safe-area-inset-bottom));
     overflow-y: auto;
   }
 
@@ -983,6 +1208,32 @@
     border-color: #4285f4;
   }
 
+  .sdk-btn-group button.warning-btn {
+    border-color: rgba(255, 149, 0, 0.5);
+  }
+
+  .sdk-btn-group button.warning-btn:hover {
+    background: rgba(255, 149, 0, 0.2);
+  }
+
+  .sdk-btn-group button.warning-btn.active {
+    background: #ff9500;
+    border-color: #ff9500;
+  }
+
+  .sdk-btn-group button.danger-btn {
+    border-color: rgba(255, 59, 48, 0.5);
+  }
+
+  .sdk-btn-group button.danger-btn:hover {
+    background: rgba(255, 59, 48, 0.2);
+  }
+
+  .sdk-btn-group button.danger-btn.active {
+    background: #ff3b30;
+    border-color: #ff3b30;
+  }
+
   .sdk-color-row {
     display: flex;
     align-items: center;
@@ -1020,6 +1271,26 @@
     accent-color: #4285f4;
   }
 
+  .sdk-checkbox-row {
+    margin-bottom: 8px;
+  }
+
+  .sdk-checkbox-row label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+  }
+
+  .sdk-checkbox-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #4285f4;
+    cursor: pointer;
+  }
+
   .sdk-state-display {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.6);
@@ -1029,5 +1300,109 @@
   .sdk-state-display .state-value {
     color: #4285f4;
     font-family: "SF Mono", Monaco, monospace;
+  }
+
+  /* Mobile responsive styles */
+  @media (max-width: 768px) {
+    .location-info {
+      top: 10px;
+      left: 10px;
+      right: auto;
+      max-width: calc(50% - 20px);
+      font-size: 11px;
+    }
+
+    .speed-display {
+      margin: 4px 0;
+    }
+
+    .speed-value {
+      font-size: 18px;
+    }
+
+    .heading-display {
+      font-size: 14px;
+    }
+
+    .sdk-controls {
+      top: 10px;
+      right: 10px;
+      left: auto;
+      max-width: calc(50% - 20px);
+      min-width: 180px;
+      padding: 12px;
+      max-height: calc(100vh - 100px);
+    }
+
+    .sdk-header {
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+
+    .sdk-section {
+      margin-bottom: 12px;
+    }
+
+    .sdk-section-title {
+      font-size: 10px;
+    }
+
+    .sdk-btn-group button {
+      padding: 6px 10px;
+      font-size: 11px;
+    }
+
+    .sdk-color-row label {
+      font-size: 11px;
+    }
+
+    .sdk-slider-row label {
+      font-size: 10px;
+    }
+
+    .location-toggle-btn {
+      bottom: 80px;
+      left: 10px;
+      padding: 10px 16px;
+      font-size: 12px;
+    }
+
+    .sdk-toggle-btn {
+      bottom: 80px;
+      right: 10px;
+      padding: 10px 16px;
+      font-size: 12px;
+    }
+
+    .data-row {
+      font-size: 10px;
+    }
+
+    .data-label {
+      font-size: 8px;
+    }
+
+    .data-value {
+      font-size: 10px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .location-info {
+      max-width: calc(100% - 20px);
+      left: 10px;
+      right: 10px;
+    }
+
+    .sdk-controls {
+      max-width: calc(100% - 20px);
+      left: 10px;
+      right: 10px;
+    }
+
+    .location-toggle-btn,
+    .sdk-toggle-btn {
+      bottom: 70px;
+    }
   }
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fade } from 'svelte/transition';
+  import { fade } from "svelte/transition";
 
   export let lastUpdate: number | null = null;
   export let longitude: number | null = null;
@@ -13,18 +13,19 @@
   $: if (lastUpdate && lastUpdate !== lastUpdateTs) {
     const now = Date.now();
     if (lastUpdateTs > 0) {
-        const interval = now - lastUpdateTs;
-        updateIntervals = [...updateIntervals.slice(-4), interval]; // Keep last 5
-        avgInterval = updateIntervals.reduce((a, b) => a + b, 0) / updateIntervals.length;
+      const interval = now - lastUpdateTs;
+      updateIntervals = [...updateIntervals.slice(-4), interval]; // Keep last 5
+      avgInterval =
+        updateIntervals.reduce((a, b) => a + b, 0) / updateIntervals.length;
     }
     lastUpdateTs = now;
-    
+
     flash = true;
-    setTimeout(() => flash = false, 500);
+    setTimeout(() => (flash = false), 500);
   }
 </script>
 
-<div class="info-bar" class:flash={flash}>
+<div class="info-bar" class:flash>
   <div class="content">
     {#if longitude && latitude}
       <span class="coords">
@@ -32,12 +33,12 @@
       </span>
       <div class="meta-row">
         <span class="time">
-            {new Date(lastUpdate || Date.now()).toLocaleTimeString()}
+          {new Date(lastUpdate || Date.now()).toLocaleTimeString()}
         </span>
         {#if avgInterval > 0}
-            <span class="freq">
-                ~{(avgInterval / 1000).toFixed(1)}s
-            </span>
+          <span class="freq">
+            ~{(avgInterval / 1000).toFixed(1)}s
+          </span>
         {/if}
       </div>
     {:else}
@@ -53,7 +54,7 @@
     gap: 8px;
     align-items: center;
   }
-  
+
   .freq {
     font-size: 10px;
     color: #888;
@@ -64,19 +65,19 @@
 
   .info-bar {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(100px + env(safe-area-inset-bottom));
     left: 50%;
     transform: translateX(-50%);
     background: rgba(255, 255, 255, 0.9);
     padding: 12px 20px;
     border-radius: 30px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     display: flex;
     align-items: center;
     gap: 10px;
     transition: transform 0.2s;
     z-index: 1000;
-    min-width: 200px;
+    min-width: min(200px, 90vw);
     justify-content: center;
   }
 
@@ -88,7 +89,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      Helvetica, Arial, sans-serif;
   }
 
   .coords {
@@ -98,7 +100,7 @@
   }
 
   .time {
-    font-size: 10px;
+    font-size: 11px;
     color: #666;
   }
 
@@ -111,8 +113,7 @@
   }
 
   .indicator.active {
-    background: #4285F4;
-    box-shadow: 0 0 10px #4285F4;
+    background: #4285f4;
+    box-shadow: 0 0 10px #4285f4;
   }
 </style>
-

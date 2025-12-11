@@ -1,14 +1,97 @@
 /**
- * Confidence state for GPS signal quality
+ * Confidence state for GPS signal quality and alerts
  *
  * - 'high': Good GPS signal, accurate position
  * - 'low': Degraded signal, position may be less accurate
  * - 'lost': No GPS signal, showing last known position
+ * - 'warning': Orange alert state (e.g., approaching boundary)
+ * - 'danger': Red alert state (e.g., out of bounds, emergency)
  */
-export type ConfidenceState = 'high' | 'low' | 'lost';
+export type ConfidenceState = 'high' | 'low' | 'lost' | 'warning' | 'danger';
+
+import type { RoveError, ErrorContext } from './errors';
 
 /**
- * Configuration options for UserMarker
+ * SDK-wide configuration options
+ */
+export interface SDKConfig {
+  /**
+   * Enable production mode
+   * - Disables console warnings
+   * - Disables mock location functionality
+   * @default false
+   */
+  productionMode?: boolean;
+
+  /**
+   * Enable debug logging
+   * Only has effect when productionMode is false
+   * @default false
+   */
+  debug?: boolean;
+
+  /**
+   * Error telemetry callback
+   *
+   * Called whenever RoveError.emit() is used, allowing integration
+   * with external error tracking services like Sentry or Datadog.
+   *
+   * @example
+   * ```typescript
+   * configureSDK({
+   *   onError: (error, context) => {
+   *     Sentry.captureException(error, {
+   *       tags: { component: context.component },
+   *       extra: context.metadata,
+   *     });
+   *   },
+   * });
+   * ```
+   */
+  onError?: (error: RoveError, context: ErrorContext) => void;
+}
+
+/** Global SDK configuration */
+let sdkConfig: SDKConfig = {
+  productionMode: false,
+  debug: false,
+};
+
+/**
+ * Configure SDK-wide settings
+ * Call this before creating any SDK instances
+ */
+export function configureSDK(config: SDKConfig): void {
+  sdkConfig = { ...sdkConfig, ...config };
+}
+
+/**
+ * Get current SDK configuration
+ */
+export function getSDKConfig(): Readonly<SDKConfig> {
+  return sdkConfig;
+}
+
+/**
+ * Internal logging utility that respects production mode
+ */
+export function sdkWarn(message: string, ...args: unknown[]): void {
+  if (!sdkConfig.productionMode) {
+    console.warn(`[RoveBeacon] ${message}`, ...args);
+  }
+}
+
+/**
+ * Internal debug logging utility
+ */
+export function sdkDebug(message: string, ...args: unknown[]): void {
+  if (!sdkConfig.productionMode && sdkConfig.debug) {
+    console.log(`[RoveBeacon:debug] ${message}`, ...args);
+  }
+}
+
+/**
+ * Configuration options for ThreeUserMarker
  *
  * All size values are in scene units (not pixels).
  * Color values are hex numbers (e.g., 0x4285F4).
@@ -76,10 +159,23 @@ export interface UserMarkerOptions {
   coneOpacity?: number;
 
   /**
+   * Color of the direction/heading cone (defaults to main color)
+   * @default Same as color
+   */
+  coneColor?: number;
+
+  /**
    * Color of the accuracy ring (defaults to main color)
    * @default Same as color
    */
   accuracyRingColor?: number;
+
+  /**
+   * Speed of the accuracy ring pulse animation in cycles per second
+   * Higher values = faster pulsing. Set to 0 to disable pulsing.
+   * @default 0.3 (approximately one pulse every 3.5 seconds)
+   */
+  pulseSpeed?: number;
 
   /**
    * Enable smooth position interpolation when location updates
@@ -146,6 +242,63 @@ export interface UserMarkerOptions {
    * @default 500
    */
   accuracyLostThresholdMeters?: number;
+
+  /**
+   * Minimum scale for the marker (prevents disappearing when zoomed out very far)
+   * @default 0.5
+   */
+  minScale?: number;
+
+  /**
+   * Maximum scale for the marker (prevents becoming too large when zoomed in close)
+   * @default 10
+   */
+  maxScale?: number;
+
+  /**
+   * Reference distance at which scale equals 1.0
+   * Adjust this based on your scene's typical viewing distance
+   * @default 1000
+   */
+  scaleReferenceDistance?: number;
+
+  /**
+   * Scaling curve exponent for zoom-adaptive sizing
+   * Lower values (e.g., 0.3) = more gradual scaling (marker stays more consistent across zoom levels)
+   * Higher values (e.g., 1.0) = linear scaling (marker size changes more dramatically with zoom)
+   * @default 0.5 (square root curve - good balance)
+   */
+  scaleCurveExponent?: number;
+
+  /**
+   * When true, marker maintains a fixed screen size regardless of camera distance
+   * (similar to MapLibre behavior). When false, uses zoom-adaptive scaling.
+   * @default true
+   */
+  fixedScreenSize?: boolean;
+
+  /**
+   * Overall scale multiplier for the entire marker (dot, border, ring, cone)
+   * Use this to make the entire beacon larger or smaller uniformly.
+   * Values > 1 make it larger, < 1 make it smaller.
+   * @default 1.0
+   */
+  overallScale?: number;
+
+  /**
+   * Independent scale multiplier for the accuracy ring/pulse
+   * Use this to make the ring larger or smaller independently of the dot.
+   * Values > 1 make it larger, < 1 make it smaller.
+   * @default 1.0
+   */
+  ringScale?: number;
+
+  /**
+   * Optional reference to the maplibre-gl library.
+   * Providing this avoids reliance on the global `window.maplibregl` or internal `_maplibregl` properties,
+   * which is safer and recommended for modular environments.
+   */
+  mapLibreModule?: any;
 }
 
 /**
@@ -235,6 +388,13 @@ export interface GeolocationOptions {
    * @default 10000 (10 seconds)
    */
   timeout?: number;
+
+  /**
+   * Maximum GPS updates per second
+   * Lower values reduce battery drain on high-frequency GPS devices
+   * @default 10 (100ms minimum interval)
+   */
+  maxUpdateRate?: number;
 }
 
 /**
@@ -289,22 +449,30 @@ export interface CoordinateConverter {
   fromScene?(x: number, y: number): { longitude: number; latitude: number };
 }
 
+import type { LocationSource } from './sources';
+
 /**
- * Options for YouAreHereController
+ * Options for ThreeYouAreHereController
  *
- * The controller combines UserMarker and GeolocationProvider into
+ * The controller combines ThreeUserMarker and GeolocationProvider into
  * a single, easy-to-use interface with automatic coordinate conversion.
  */
 export interface YouAreHereControllerOptions {
   /**
-   * Options for the UserMarker visual appearance
+   * Options for the ThreeUserMarker visual appearance
    */
   markerOptions?: UserMarkerOptions;
 
   /**
-   * Options for the GeolocationProvider
+   * Options for the GeolocationProvider (ignored if locationSource is provided)
    */
   geolocationOptions?: GeolocationOptions;
+
+  /**
+   * Custom location source to use instead of default GeolocationProvider
+   * Useful for testing, replays, or custom location providers
+   */
+  locationSource?: LocationSource;
 
   /**
    * Center point for coordinate conversion [longitude, latitude]

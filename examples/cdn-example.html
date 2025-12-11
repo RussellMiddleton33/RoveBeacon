@@ -200,7 +200,7 @@
 
   <script>
     // Get SDK classes from global
-    const { YouAreHereController, UserMarker, GeolocationProvider, MercatorProjection } = RoveMapsYouAreHere;
+    const { ThreeYouAreHereController, ThreeUserMarker, GeolocationProvider, MercatorProjection } = RoveMapsYouAreHere;
 
     // DOM elements
     const canvas = document.getElementById('canvas');
@@ -266,7 +266,7 @@
 
       try {
         // Create controller
-        controller = new YouAreHereController({
+        controller = new ThreeYouAreHereController({
           center: center,
           scale: 1,
           markerOptions: {
