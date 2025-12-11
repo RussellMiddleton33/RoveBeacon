@@ -969,6 +969,17 @@ export class ThreeUserMarker extends THREE.Group {
   }
 
   /**
+   * Reset the staleness timer to prevent immediate "lost" state
+   * Call this when resuming from a paused state (e.g., tab becoming visible)
+   * to give geolocation time to get a new fix before showing stale indicator
+   * @returns this for method chaining
+   */
+  resetStalenessTimer(): this {
+    this.lastPositionUpdateTime = Date.now();
+    return this;
+  }
+
+  /**
    * Check if automatic confidence is currently enabled
    */
   isAutoConfidenceEnabled(): boolean {

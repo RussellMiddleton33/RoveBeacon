@@ -62,11 +62,13 @@ export class GeolocationProvider implements LocationSource {
     error: Set<EventCallback<'error'>>;
     permissionChange: Set<EventCallback<'permissionChange'>>;
     deviceOrientation: Set<EventCallback<'deviceOrientation'>>;
+    resume: Set<EventCallback<'resume'>>;
   } = {
       update: new Set(),
       error: new Set(),
       permissionChange: new Set(),
       deviceOrientation: new Set(),
+      resume: new Set(),
     };
 
   constructor(options: GeolocationOptions = {}) {
@@ -116,6 +118,9 @@ export class GeolocationProvider implements LocationSource {
 
     this.isPaused = false;
     sdkDebug('GeolocationProvider: Resuming after visibility change');
+
+    // Emit resume event so listeners can reset staleness timers
+    this.emit('resume', undefined as void);
 
     // Restart watching
     this.watchId = navigator.geolocation.watchPosition(
@@ -243,6 +248,7 @@ export class GeolocationProvider implements LocationSource {
       this.listeners.error.clear();
       this.listeners.permissionChange.clear();
       this.listeners.deviceOrientation.clear();
+      this.listeners.resume.clear();
     }
   }
 
@@ -810,6 +816,7 @@ export class GeolocationProvider implements LocationSource {
     this.listeners.error.clear();
     this.listeners.permissionChange.clear();
     this.listeners.deviceOrientation.clear();
+    this.listeners.resume.clear();
     this.stopDeviceOrientation();
 
     this.lastLocation = null;

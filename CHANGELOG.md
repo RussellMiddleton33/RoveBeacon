@@ -2,6 +2,34 @@
 
 All notable changes to the "rovemaps-you-are-here" project will be documented in this file.
 
+## [2.5.0] - 2025-12-11
+
+### New Features
+
+#### Tab Visibility Resume Handling
+- **Smart Resume**: When returning to a browser tab after it was hidden, the marker no longer immediately shows "lost" (grey) state
+- **Smooth Re-acquisition**: The marker resets its staleness timer on visibility resume, giving GPS time to get a new fix
+- **New `resume` Event**: GeolocationProvider now emits a `resume` event when tracking restarts after tab visibility change
+- **New `resetStalenessTimer()` Method**: ThreeUserMarker now exposes this method for custom visibility handling
+
+This fixes the issue where returning to a tab would show a grey/lost marker while waiting for GPS to re-acquire.
+
+### Breaking Changes
+- **Default Orientation Changed**: Default coordinate system is now `'y-up'` (standard Three.js) instead of `'z-up'` (GIS convention)
+  - If you're using this SDK with GIS/mapping tiles, add `orientation: 'z-up'` to your marker options
+  - Standard Three.js users no longer need to specify orientation
+
+### Bug Fixes
+- **Memory Leaks Fixed**: Fixed memory leaks in `setDotColor()`, `setRingColor()`, `setConeColor()`, and `applyConfidenceState()` where materials and geometries weren't being disposed before recreation
+- **Browser Compatibility**: Fixed `process.env.NODE_ENV` reference that broke direct browser usage via CDN
+
+### Performance
+- **Smaller Bundle**: Bundle reduced from 157KB to 125KB by eliminating dev-only code paths
+
+### CDN
+- **unpkg**: `https://unpkg.com/rovemaps-you-are-here@2.5.0/dist/rovemaps-you-are-here.js`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/rovemaps-you-are-here@2.5.0/dist/rovemaps-you-are-here.js`
+
 ## [2.2.0] - 2025-12-10
 
 ### New Features - MapLibre GL JS Support

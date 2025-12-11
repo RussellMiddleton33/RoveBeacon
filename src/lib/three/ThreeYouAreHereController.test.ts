@@ -12,11 +12,13 @@ class MockLocationSource implements LocationSource {
         error: Set<(data: GeolocationPositionError | Error) => void>;
         permissionChange: Set<(data: PermissionState) => void>;
         deviceOrientation: Set<(data: DeviceOrientationEvent) => void>;
+        resume: Set<(data: void) => void>;
     } = {
             update: new Set(),
             error: new Set(),
             permissionChange: new Set(),
             deviceOrientation: new Set(),
+            resume: new Set(),
         };
 
     private lastLocation: LocationData | null = null;

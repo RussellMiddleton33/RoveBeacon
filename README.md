@@ -62,7 +62,7 @@ await controller.start(scene);
 | **Confidence States** | Visual feedback for GPS signal quality |
 | **Smooth Animations** | Frame-rate independent position and heading interpolation |
 | **Auto Staleness** | Automatic confidence degradation when GPS signal is lost |
-| **Battery Aware** | Pauses tracking when tab is hidden |
+| **Battery Aware** | Pauses tracking when tab is hidden, smart resume when visible |
 | **Multi-Platform** | Three.js, MapLibre GL JS, and MapBox GL JS support |
 
 ---

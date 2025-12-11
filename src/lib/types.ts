@@ -436,6 +436,8 @@ export interface GeolocationEvents {
   permissionChange: PermissionState;
   /** Fired when device orientation changes (compass) */
   deviceOrientation: DeviceOrientationEvent;
+  /** Fired when tracking resumes after visibility change (tab becomes visible) */
+  resume: void;
 }
 
 /**

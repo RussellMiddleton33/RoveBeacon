@@ -140,6 +140,13 @@ export class ThreeYouAreHereController {
       // Pass raw heading - marker handles smoothing
       this.marker.setDeviceHeading(heading);
     });
+
+    // Wire up visibility resume - reset staleness timer so marker doesn't
+    // immediately show "lost" state while waiting for GPS to get a new fix
+    this.geolocation.on('resume', () => {
+      if (this.isDisposed) return;
+      this.marker.resetStalenessTimer();
+    });
   }
 
   /**
