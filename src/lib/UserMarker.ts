@@ -310,6 +310,23 @@ export class UserMarker extends THREE.Group {
   }
 
   /**
+   * Set position directly from lat/lng coordinates
+   * Automatically converts to scene coordinates using internal projection
+   * Requires setProjectionCenter() to be called first
+   * @param longitude Longitude in degrees
+   * @param latitude Latitude in degrees
+   * @param altitude Altitude in meters (optional, default: 0)
+   */
+  setLatLng(longitude: number, latitude: number, altitude: number = 0): void {
+    if (!this.projection) {
+      console.warn('UserMarker: Call setProjectionCenter() before setLatLng()');
+      return;
+    }
+    const [x, y, z] = this.projection.lngLatToScene(longitude, latitude, altitude);
+    this.setPosition(x, y, z);
+  }
+
+  /**
    * Update marker color
    */
   setColor(color: number): void {
