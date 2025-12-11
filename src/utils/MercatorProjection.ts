@@ -112,10 +112,10 @@ export class MercatorProjection {
     // So we negate Y to match the coordinate system
     const y = -deltaY * MERCATOR_COORDINATE_SCALE;
 
-    // Altitude in meters - NOT scaled by Mercator distortion (altitude is vertical, not horizontal)
-    // Only apply the scene scale factor for consistency with x/y units
-    const validAltitude = isValidNumber(altitude) ? altitude : 0;
-    const z = validAltitude * this.scale;
+    // Altitude: Return as-is without scaling. GPS altitude is notoriously inaccurate
+    // and scaling it by the Mercator factor would produce unusably large values.
+    // Callers should generally pass 0 and handle elevation separately if needed.
+    const z = isValidNumber(altitude) ? altitude : 0;
 
     return [x, y, z];
   }
@@ -158,12 +158,13 @@ export class MercatorProjection {
 
   /**
    * Convert scene Z coordinate back to altitude in meters
+   * Note: Since altitude is no longer scaled, this just returns z as-is
    */
   sceneZToAltitude(z: number): number {
     if (!isValidNumber(z)) {
       return 0;
     }
-    return z / this.scale;
+    return z;  // No longer scaled
   }
 
   /**

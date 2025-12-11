@@ -47,8 +47,8 @@
   let markerScale = 1;
   let ringScale = 0.2;
   let pulseSpeed = 0.2;
-  let dotSize = 4;
-  let dotStrokeWidth = 1;
+  let dotSize = 8;
+  let dotStrokeWidth = 2;
 
   // Auto-confidence tracking
   let autoConfidenceEnabled = true;
@@ -62,8 +62,9 @@
   let fixedScreenSize = true;
 
   // UI Control State - default to hidden on mobile
-  let showControls = typeof window !== 'undefined' ? window.innerWidth > 768 : true;
-  let showLocationPanel = true;
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+  let showControls = !isMobile;
+  let showLocationPanel = !isMobile;
   let signalLostFadeStart = 10;
   let signalLostFadeDuration = 20;
 
@@ -177,7 +178,7 @@
           coneColor: parseInt(coneColor.replace("#", ""), 16),
           showAccuracyRing: true,
           showDirectionCone: true,
-          orientation: "z-up", // Explicitly match our Z-up scene
+          orientation: "z-up",
         },
         geolocationOptions: {
           enableHighAccuracy: true,
@@ -649,7 +650,27 @@
 <div bind:this={container} class="map-container"></div>
 
 <!-- Location & Camera Info -->
-{#if showLocationPanel}
+{#if locationPermission === "denied" || locationPermission === "unavailable"}
+  <div class="location-required-overlay">
+    <div class="location-required-card">
+      <div class="location-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" stroke-dasharray="4 2"/>
+        </svg>
+      </div>
+      <h1>Location Required</h1>
+      <p>This test environment requires your location to demonstrate the SDK features.</p>
+      <p class="instructions">Please enable location access in your browser settings, then refresh and accept the location prompt.</p>
+      <div class="button-group">
+        <button class="enable-btn" on:click={() => window.location.reload()}>
+          Refresh Page
+        </button>
+      </div>
+    </div>
+  </div>
+{:else if showLocationPanel}
   <div class="info-overlay location-info">
     <div class="info-label">Location</div>
 
@@ -1035,6 +1056,115 @@
 {/if}
 
 <style>
+  .location-required-overlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 20px;
+  }
+
+  .location-required-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 48px 40px;
+    text-align: center;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .location-icon {
+    color: #4285f4;
+    margin-bottom: 24px;
+    animation: pulse-icon 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-icon {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+  }
+
+  .location-required-card h1 {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: white;
+    margin: 0 0 16px 0;
+  }
+
+  .location-required-card p {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0 0 16px 0;
+    line-height: 1.5;
+  }
+
+  .location-required-card .instructions {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0 0 32px 0;
+  }
+
+  .location-required-card .button-group {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .location-required-card .enable-btn {
+    background: linear-gradient(135deg, #4285f4 0%, #5a9bff 100%);
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(66, 133, 244, 0.4);
+  }
+
+  .location-required-card .enable-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(66, 133, 244, 0.5);
+  }
+
+  .location-required-card .enable-btn:active {
+    transform: translateY(0);
+  }
+
+  .location-required-card .retry-btn {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 16px 32px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .location-required-card .retry-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: white;
+  }
+
+  .location-required-card .hint {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+    margin: 24px 0 0 0;
+  }
+
   .map-container {
     width: 100%;
     width: 100%;

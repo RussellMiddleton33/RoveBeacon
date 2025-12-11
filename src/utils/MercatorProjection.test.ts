@@ -75,11 +75,12 @@ describe('MercatorProjection', () => {
             expect(z).toBe(100);
         });
 
-        it('scales altitude by scale factor', () => {
+        it('returns altitude unscaled (GPS altitude is inaccurate)', () => {
             const proj = new MercatorProjection(CENTER, 10);
             const altitude = 50;
             const [x, y, z] = proj.lngLatToScene(CENTER[0], CENTER[1], altitude);
-            expect(z).toBe(500);
+            // Altitude is no longer scaled - returned as-is
+            expect(z).toBe(50);
         });
 
         it('returns origin for invalid coordinates', () => {
@@ -160,10 +161,11 @@ describe('MercatorProjection', () => {
     });
 
     describe('sceneZToAltitude()', () => {
-        it('converts Z coordinate back to altitude', () => {
+        it('returns Z as-is (no scaling)', () => {
             const proj = new MercatorProjection(CENTER, 10);
             const altitude = proj.sceneZToAltitude(500);
-            expect(altitude).toBe(50);
+            // No longer scaled - returns z as-is
+            expect(altitude).toBe(500);
         });
 
         it('returns 0 for invalid Z', () => {

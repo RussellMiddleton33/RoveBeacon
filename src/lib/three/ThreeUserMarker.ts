@@ -58,8 +58,8 @@ const TARGET_DT_SEC = 0.016;
 const DEFAULT_OPTIONS: Required<UserMarkerOptions> = {
   color: 0x4285F4,
   borderColor: 0xffffff,
-  dotSize: 4,
-  borderWidth: 1,
+  dotSize: 8,
+  borderWidth: 2,
   showAccuracyRing: true,
   showDirectionCone: true,
   minSpeedForDirection: 0.5,
@@ -263,7 +263,7 @@ export class ThreeUserMarker extends THREE.Group {
 
     this.glowMesh = new THREE.Mesh(this.ringGeometry, this.glowMaterials.high);
     this.glowMesh.position.z = 0.1;
-    this.glowMesh.renderOrder = 0;
+    this.glowMesh.renderOrder = 100;
     this.glowMesh.visible = this.options.showAccuracyRing;
 
     // White Border - middle layer
@@ -273,8 +273,8 @@ export class ThreeUserMarker extends THREE.Group {
       side: THREE.DoubleSide,
     });
     this.borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
-    this.borderMesh.position.z = 0.11;
-    this.borderMesh.renderOrder = 1;
+    this.borderMesh.position.z = 0.2;
+    this.borderMesh.renderOrder = 101;
 
     // Blue Dot (main marker) - top layer
     const dotGeometry = new THREE.CircleGeometry(dotSize, 32);
@@ -283,8 +283,8 @@ export class ThreeUserMarker extends THREE.Group {
       side: THREE.DoubleSide,
     });
     this.dotMesh = new THREE.Mesh(dotGeometry, dotMaterial);
-    this.dotMesh.position.z = 0.12;
-    this.dotMesh.renderOrder = 2;
+    this.dotMesh.position.z = 0.3;
+    this.dotMesh.renderOrder = 102;
 
     // Direction Cone
     this.coneGroup = this.createDirectionCone();
@@ -377,7 +377,7 @@ export class ThreeUserMarker extends THREE.Group {
     coreMesh.renderOrder = -1; // Render before dot/border
     group.add(coreMesh);
 
-    group.position.z = 0.01; // Below the ring (0.1)
+    group.position.z = 0.05; // Below the ring (at z=0.1)
 
     return group;
   }
@@ -404,8 +404,8 @@ export class ThreeUserMarker extends THREE.Group {
     this.lastPositionUpdateTime = Date.now();
 
     // Reuse targetPosition to avoid allocation
-    // Small elevation (0.1) to prevent z-fighting with ground plane
-    this.targetPosition.set(x, y, z + 0.1);
+    // No automatic elevation - let the height controls handle it
+    this.targetPosition.set(x, y, z);
 
     if (!this.isVisible) {
       // First position - snap immediately

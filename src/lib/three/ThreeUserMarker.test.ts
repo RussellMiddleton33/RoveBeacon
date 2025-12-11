@@ -57,7 +57,7 @@ describe('ThreeUserMarker', () => {
             const target = (marker as any).targetPosition;
             expect(target.x).toBe(100);
             expect(target.y).toBe(200);
-            expect(target.z).toBeCloseTo(5.1); // +0.1 elevation
+            expect(target.z).toBe(5); // No automatic elevation - controlled by height setting
         });
 
         it('makes marker visible on first position', () => {

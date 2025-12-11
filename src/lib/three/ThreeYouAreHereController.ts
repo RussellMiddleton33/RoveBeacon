@@ -79,10 +79,14 @@ export class ThreeYouAreHereController {
     this.geolocation.on('update', (location) => {
       if (this.isDisposed) return;
 
+      // IMPORTANT: Pass altitude as 0 to lngLatToScene because the scale factor
+      // is for Mercator projection (horizontal), not altitude (vertical).
+      // Altitude would be scaled incorrectly (e.g., 50m * 78271 = millions of units).
+      // The marker already adds a small z-offset internally for visibility.
       const [x, y, z] = this.marker.getProjection()?.lngLatToScene(
         location.longitude,
         location.latitude,
-        location.altitude ?? 0
+        0  // Ignore GPS altitude - it causes marker to be positioned too high
       ) ?? [0, 0, 0];
 
       // Handle coordinate system based on marker orientation
