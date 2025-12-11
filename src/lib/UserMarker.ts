@@ -298,7 +298,17 @@ export class UserMarker extends THREE.Group {
       this.coneGroup.visible = false;
     }
   }
-  
+
+  /**
+   * Set the projection center for coordinate conversion
+   * Call this once when your map initializes to enable setLatLng()
+   * @param center [longitude, latitude] of the map/venue center
+   * @param scale Scale factor for the projection (default: 1)
+   */
+  setProjectionCenter(center: [number, number], scale: number = 1): void {
+    this.projection = new MercatorProjection(center, scale);
+  }
+
   /**
    * Update marker color
    */
